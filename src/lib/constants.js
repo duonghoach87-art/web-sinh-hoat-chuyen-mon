@@ -58,6 +58,7 @@ export const DOCUMENT_CATEGORIES = [
 
 export const ISSUING_AUTHORITIES = [
   'Bộ Giáo dục & Đào tạo',
+  'UBND tỉnh Lai Châu',
   'Sở Giáo dục & Đào tạo',
   'Phòng Văn hóa',
   'UBND xã Sì Lở Lầu',
