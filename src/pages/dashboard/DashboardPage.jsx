@@ -197,7 +197,7 @@ export default function DashboardPage() {
           </div>
 
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight leading-tight">
-            Chào mừng {formatGreetingName(profile?.full_name)} đến với Cổng Tổ KHTN
+            Chào mừng {formatGreetingName(profile?.full_name)} đến với Cổng thông tin tổ KHTN
           </h1>
 
           <p className="text-slate-200 text-xs sm:text-sm leading-relaxed max-w-2xl font-normal">
