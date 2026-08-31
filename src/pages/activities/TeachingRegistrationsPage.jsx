@@ -321,7 +321,7 @@ export default function TeachingRegistrationsPage() {
                             {reg.topic_title}
                           </h4>
                           <span className="text-[11px] text-slate-500 block">
-                            {reg.subject} &bullet; Tiết PPCT: {reg.curriculum_period || '---'}
+                            {reg.subject} • Tiết PPCT: {reg.curriculum_period || '---'}
                           </span>
                           {reg.reviewer_note && (
                             <p className="text-[11px] text-slate-500 italic bg-slate-50 p-1 rounded mt-1">

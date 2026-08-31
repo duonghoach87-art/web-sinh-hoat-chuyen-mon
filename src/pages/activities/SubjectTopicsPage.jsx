@@ -195,7 +195,7 @@ export default function SubjectTopicsPage() {
                   <Badge variant={topic.type === 'lesson_study' ? 'primary' : 'success'}>
                     {topic.subject}
                   </Badge>
-                  <span className="text-xs font-semibold text-slate-400">&bullet; {topic.date}</span>
+                  <span className="text-xs font-semibold text-slate-400">• {topic.date}</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-800">{topic.title}</h4>
                 <p className="text-xs text-slate-600">{topic.summary}</p>

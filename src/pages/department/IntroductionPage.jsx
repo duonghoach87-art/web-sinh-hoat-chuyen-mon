@@ -42,7 +42,7 @@ export default function IntroductionPage() {
         <div className="flex items-center space-x-3 text-brand-600 mb-3">
           <School className="w-6 h-6" />
           <span className="text-xs font-bold uppercase tracking-wider">
-            Quy Định & Pháp Lý &bullet; Thông tư 32/2020/TT-BGDĐT
+            Quy Định & Pháp Lý • Thông tư 32/2020/TT-BGDĐT
           </span>
         </div>
         <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-800 tracking-tight leading-tight">

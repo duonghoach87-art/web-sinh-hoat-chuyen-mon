@@ -11,7 +11,7 @@ export default function Footer() {
         <div className="space-y-1 text-center md:text-left">
           <div className="flex items-center justify-center md:justify-start space-x-2 text-slate-700 font-bold">
             <School className="w-4 h-4 text-brand-600 shrink-0" />
-            <span>{settings?.school_name || 'TRƯỜNG THCS'} &bullet; {settings?.department_name || 'TỔ KHOA HỌC TỰ NHIÊN'}</span>
+            <span>{settings?.school_name || 'TRƯỜNG THCS'} • {settings?.department_name || 'TỔ KHOA HỌC TỰ NHIÊN'}</span>
           </div>
           <div className="flex items-center justify-center md:justify-start space-x-4 text-[11px] text-slate-400">
             {settings?.address && (

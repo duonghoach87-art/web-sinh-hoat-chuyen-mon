@@ -135,7 +135,7 @@ export default function LessonEvaluationModal({
           <div>
             <h4 className="font-bold text-brand-900 text-sm">{registration?.topic_title}</h4>
             <p className="text-slate-600 mt-0.5">
-              Giáo viên dạy: <strong>{registration?.profiles?.full_name}</strong> &bullet; Lớp:{' '}
+              Giáo viên dạy: <strong>{registration?.profiles?.full_name}</strong> • Lớp:{' '}
               {registration?.classroom} (Tiết {registration?.period_number})
             </p>
           </div>
@@ -317,7 +317,7 @@ export default function LessonEvaluationModal({
                         {item.evaluator?.full_name || 'Đồng nghiệp'}
                       </span>
                       <span className="text-[10px] text-slate-400 block">
-                        {item.evaluator?.specialty} &bullet; {formatDate(item.created_at)}
+                        {item.evaluator?.specialty} • {formatDate(item.created_at)}
                       </span>
                     </div>
                   </div>

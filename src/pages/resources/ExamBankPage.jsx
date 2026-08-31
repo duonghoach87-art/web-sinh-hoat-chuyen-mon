@@ -248,7 +248,7 @@ export default function ExamBankPage() {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-md bg-brand-50 text-brand-700 border border-brand-100">
-                      Khối {exam.grade_level} &bullet; {exam.subject}
+                      Khối {exam.grade_level} • {exam.subject}
                     </span>
                     <span className="text-[11px] text-slate-400 font-medium">
                       Năm: {exam.school_year}

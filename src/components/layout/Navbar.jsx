@@ -55,7 +55,7 @@ export default function Navbar({ onToggleSidebar }) {
                 {settings?.department_name || 'TỔ KHOA HỌC TỰ NHIÊN'}
               </h1>
               <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                {settings?.school_name || 'Trường THCS'} &bullet; Năm học {settings?.school_year || '2025-2026'}
+                {settings?.school_name || 'Trường THCS'} • Năm học {settings?.school_year || '2025-2026'}
               </p>
             </div>
           </Link>

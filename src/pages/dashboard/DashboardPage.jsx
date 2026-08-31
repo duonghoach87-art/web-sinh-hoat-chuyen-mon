@@ -92,7 +92,7 @@ export default function DashboardPage() {
           <div className="inline-flex items-center space-x-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-semibold text-brand-200 mb-3 border border-white/10">
             <School className="w-3.5 h-3.5" />
             <span>
-              {settings?.school_name || 'Trường THCS'} &bullet; Năm Học {settings?.school_year || '2025-2026'}
+              {settings?.school_name || 'Trường THCS'} • Năm Học {settings?.school_year || '2025-2026'}
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight leading-tight mb-2">

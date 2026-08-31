@@ -146,7 +146,7 @@ export default function PrintReportModal({
                     BẢNG TỔNG HỢP ĐIỂM THI ĐUA GIÁO VIÊN
                   </h2>
                   <p className="text-sm font-semibold italic">
-                    Kỳ đánh giá: {data.periodValue} &bullet; Năm học {settings?.school_year}
+                    Kỳ đánh giá: {data.periodValue} • Năm học {settings?.school_year}
                   </p>
                 </div>
 
