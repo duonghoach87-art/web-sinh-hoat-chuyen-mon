@@ -26,8 +26,8 @@ export default function SettingsPage() {
     department_name: settings?.department_name || 'TỔ KHOA HỌC TỰ NHIÊN',
     school_year: settings?.school_year || '2025-2026',
     active_term: settings?.active_term || 'Học kỳ 1',
-    principal_name: settings?.principal_name || 'Nguyễn Văn Quản (Hiệu trưởng)',
-    head_teacher_name: settings?.head_teacher_name || 'Nguyễn Thị Hảo (Tổ trưởng KHTN)',
+    principal_name: settings?.principal_name || 'Thầy Nguyễn Văn Quản (Hiệu trưởng)',
+    head_teacher_name: settings?.head_teacher_name || 'Thầy Dương Văn Hoạch (Tổ trưởng KHTN)',
     address: settings?.address || 'Số 123 Đường Giáo Dục, Quận/Huyện...',
     phone_number: settings?.phone_number || '024.3838.xxxx',
     motto: settings?.motto || 'Đoàn kết - Sáng tạo - Đổi mới phương pháp dạy học',
@@ -219,7 +219,7 @@ export default function SettingsPage() {
                   name="head_teacher_name"
                   value={formData.head_teacher_name}
                   onChange={handleChange}
-                  placeholder="Cô Nguyễn Thị Hảo (Tổ trưởng)"
+                  placeholder="Thầy Dương Văn Hoạch (Tổ trưởng)"
                   className="w-full px-3.5 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-xs font-semibold focus:bg-white"
                 />
               </div>

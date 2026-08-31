@@ -173,8 +173,8 @@ CREATE TABLE IF NOT EXISTS public.school_settings (
     department_name TEXT NOT NULL DEFAULT 'TỔ KHOA HỌC TỰ NHIÊN',
     school_year TEXT NOT NULL DEFAULT '2025-2026',
     active_term TEXT NOT NULL DEFAULT 'Học kỳ 1',
-    principal_name TEXT DEFAULT 'Nguyễn Văn Quản (Hiệu trưởng)',
-    head_teacher_name TEXT DEFAULT 'Nguyễn Thị Hảo (Tổ trưởng KHTN)',
+    principal_name TEXT DEFAULT 'Thầy Nguyễn Văn Quản (Hiệu trưởng)',
+    head_teacher_name TEXT DEFAULT 'Thầy Dương Văn Hoạch (Tổ trưởng KHTN)',
     address TEXT DEFAULT 'Số 123 Đường Giáo Dục, Quận/Huyện...',
     phone_number TEXT DEFAULT '024.3838.xxxx',
     logo_url TEXT,
@@ -193,8 +193,8 @@ BEGIN
             'TRƯỜNG THCS CHU VĂN AN',
             'TỔ KHOA HỌC TỰ NHIÊN',
             '2025-2026',
-            'Nguyễn Văn Quản (Hiệu trưởng)',
-            'Nguyễn Thị Hảo (Tổ trưởng KHTN)'
+            'Thầy Nguyễn Văn Quản (Hiệu trưởng)',
+            'Thầy Dương Văn Hoạch (Tổ trưởng KHTN)'
         );
     END IF;
 END $$;
