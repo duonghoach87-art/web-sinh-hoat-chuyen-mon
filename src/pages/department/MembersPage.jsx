@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
-import { SPECIALTIES, ROLE_LABELS } from '../../lib/constants';
+import { ROLE_LABELS, DEPARTMENT_SUBJECTS, KHTN_SUB_SPECIALTIES } from '../../lib/constants';
 import { uploadFileToSupabase } from '../../utils/fileUploader';
 import Modal from '../../components/common/Modal';
 import ConfirmModal from '../../components/common/ConfirmModal';
@@ -20,22 +20,35 @@ import {
   CheckCircle2,
   XCircle,
   Upload,
-  UserCheck
+  UserCheck,
+  ChevronDown,
+  Sparkles,
+  ShieldAlert
 } from 'lucide-react';
 
 export default function MembersPage() {
-  const { canManage, role: userRole } = useAuth();
+  const { canManage, role: userRole, user: currentAuthUser } = useAuth();
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSpecialty, setSelectedSpecialty] = useState('ALL');
+  const [khtnDropdownOpen, setKhtnDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
 
-  // Modal State
+  // Modal State Thêm/Sửa
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
   const [saving, setSaving] = useState(false);
   const [avatarFile, setAvatarFile] = useState(null);
 
+  // State xóa giáo viên
+  const [memberToDelete, setMemberToDelete] = useState(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // Form State
+  const [mainSubject, setMainSubject] = useState('Khoa học Tự nhiên');
+  const [khtnSubSpecialty, setKhtnSubSpecialty] = useState('Khoa học Tự nhiên');
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
@@ -45,6 +58,17 @@ export default function MembersPage() {
     phone: '',
     is_active: true
   });
+
+  // Đóng dropdown khi click ra ngoài
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setKhtnDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const fetchMembers = async () => {
     try {
@@ -70,6 +94,8 @@ export default function MembersPage() {
 
   const handleOpenAddModal = () => {
     setEditingMember(null);
+    setMainSubject('Khoa học Tự nhiên');
+    setKhtnSubSpecialty('Khoa học Tự nhiên');
     setFormData({
       full_name: '',
       email: '',
@@ -85,10 +111,19 @@ export default function MembersPage() {
 
   const handleOpenEditModal = (member) => {
     setEditingMember(member);
+    const spec = member.specialty || 'Khoa học Tự nhiên';
+    if (['Khoa học Tự nhiên', 'Vật lý', 'Hóa học', 'Sinh học'].includes(spec)) {
+      setMainSubject('Khoa học Tự nhiên');
+      setKhtnSubSpecialty(spec);
+    } else {
+      setMainSubject(spec);
+      setKhtnSubSpecialty('Khoa học Tự nhiên');
+    }
+
     setFormData({
       full_name: member.full_name || '',
       email: member.email || '',
-      specialty: member.specialty || 'Khoa học Tự nhiên',
+      specialty: spec,
       duties: member.duties || 'Giáo viên giảng dạy',
       role: member.role || 'teacher',
       phone: member.phone || '',
@@ -111,13 +146,16 @@ export default function MembersPage() {
         avatarUrl = uploadRes.publicUrl;
       }
 
+      // Xác định chuyên môn cuối cùng
+      const finalSpecialty = mainSubject === 'Khoa học Tự nhiên' ? khtnSubSpecialty : mainSubject;
+
       if (editingMember) {
         // Cập nhật
         const { error } = await supabase
           .from('profiles')
           .update({
             full_name: formData.full_name.trim(),
-            specialty: formData.specialty,
+            specialty: finalSpecialty,
             duties: formData.duties,
             role: formData.role,
             phone: formData.phone,
@@ -137,8 +175,8 @@ export default function MembersPage() {
             {
               id: newId,
               email: formData.email.trim(),
-              full_name: formData.fullName.trim(),
-              specialty: formData.specialty,
+              full_name: formData.full_name.trim(),
+              specialty: finalSpecialty,
               duties: formData.duties,
               role: formData.role,
               phone: formData.phone,
@@ -160,6 +198,38 @@ export default function MembersPage() {
     }
   };
 
+  // Xác nhận và xóa giáo viên (Dành riêng cho Admin)
+  const handleOpenDeleteConfirm = (member) => {
+    if (member.id === currentAuthUser?.id) {
+      alert('Không thể tự xóa tài khoản quản trị viên đang đăng nhập.');
+      return;
+    }
+    setMemberToDelete(member);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleExecuteDelete = async () => {
+    if (!memberToDelete) return;
+    try {
+      setDeleting(true);
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', memberToDelete.id);
+
+      if (error) throw error;
+
+      setIsDeleteModalOpen(false);
+      setMemberToDelete(null);
+      await fetchMembers();
+    } catch (err) {
+      console.error('Lỗi khi xóa giáo viên:', err);
+      alert(`Không thể xóa giáo viên: ${err.message}`);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleToggleActive = async (member) => {
     if (!canManage) return;
     try {
@@ -175,14 +245,25 @@ export default function MembersPage() {
     }
   };
 
+  // Đếm số lượng thành viên KHTN
+  const khtnMembers = members.filter((m) =>
+    ['Khoa học Tự nhiên', 'Vật lý', 'Hóa học', 'Sinh học'].includes(m.specialty)
+  );
+
   const filteredMembers = members.filter((m) => {
     const matchesSearch =
       m.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       m.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       m.duties?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesSpecialty =
-      selectedSpecialty === 'ALL' || m.specialty === selectedSpecialty;
+    let matchesSpecialty = true;
+    if (selectedSpecialty === 'ALL') {
+      matchesSpecialty = true;
+    } else if (selectedSpecialty === 'KHTN_ALL') {
+      matchesSpecialty = ['Khoa học Tự nhiên', 'Vật lý', 'Hóa học', 'Sinh học'].includes(m.specialty);
+    } else {
+      matchesSpecialty = m.specialty === selectedSpecialty;
+    }
 
     return matchesSearch && matchesSpecialty;
   });
@@ -216,19 +297,20 @@ export default function MembersPage() {
       </div>
 
       {/* Bộ Lọc & Tìm Kiếm */}
-      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+      <div className="flex flex-col md:flex-row gap-3 items-center justify-between">
         <SearchBar
           value={searchTerm}
           onChange={setSearchTerm}
           placeholder="Tìm theo họ tên, email hoặc nhiệm vụ..."
-          className="w-full sm:max-w-md"
+          className="w-full md:max-w-xs"
         />
 
-        {/* Lọc theo chuyên môn */}
-        <div className="flex items-center space-x-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+        {/* Lọc theo chuyên môn: Môn Khoa Học Tự Nhiên có Menu Dropdown cho Vật Lý, Hóa Học, Sinh Học */}
+        <div className="flex items-center space-x-2 overflow-x-visible w-full md:w-auto pb-1 md:pb-0">
+          {/* Nút Tất cả */}
           <button
             onClick={() => setSelectedSpecialty('ALL')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all ${
               selectedSpecialty === 'ALL'
                 ? 'bg-slate-800 text-white shadow-xs'
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -236,15 +318,78 @@ export default function MembersPage() {
           >
             Tất cả ({members.length})
           </button>
-          {SPECIALTIES.map((spec) => {
+
+          {/* Menu Dropdown Khoa Học Tự Nhiên (Vật Lý, Hóa Học, Sinh Học) */}
+          <div className="relative shrink-0" ref={dropdownRef}>
+            <button
+              onClick={() => setKhtnDropdownOpen(!khtnDropdownOpen)}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all ${
+                ['KHTN_ALL', 'Khoa học Tự nhiên', 'Vật lý', 'Hóa học', 'Sinh học'].includes(selectedSpecialty)
+                  ? 'bg-brand-600 text-white shadow-xs'
+                  : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <span>
+                {selectedSpecialty === 'Vật lý'
+                  ? 'KHTN • Vật lý'
+                  : selectedSpecialty === 'Hóa học'
+                  ? 'KHTN • Hóa học'
+                  : selectedSpecialty === 'Sinh học'
+                  ? 'KHTN • Sinh học'
+                  : `Khoa học Tự nhiên (${khtnMembers.length})`}
+              </span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${khtnDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {khtnDropdownOpen && (
+              <div className="absolute left-0 mt-1.5 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-30 animate-in fade-in zoom-in-95">
+                <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                  Phân Môn Khoa Học Tự Nhiên
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedSpecialty('KHTN_ALL');
+                    setKhtnDropdownOpen(false);
+                  }}
+                  className={`w-full text-left px-3.5 py-2 text-xs font-semibold hover:bg-brand-50 flex items-center justify-between ${
+                    selectedSpecialty === 'KHTN_ALL' ? 'text-brand-700 font-bold bg-brand-50/60' : 'text-slate-700'
+                  }`}
+                >
+                  <span>Tất cả môn KHTN</span>
+                  <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded-full">{khtnMembers.length}</span>
+                </button>
+                {KHTN_SUB_SPECIALTIES.map((sub) => {
+                  const count = members.filter((m) => m.specialty === sub.value).length;
+                  return (
+                    <button
+                      key={sub.value}
+                      onClick={() => {
+                        setSelectedSpecialty(sub.value);
+                        setKhtnDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-3.5 py-2 text-xs font-semibold hover:bg-brand-50 flex items-center justify-between ${
+                        selectedSpecialty === sub.value ? 'text-brand-700 font-bold bg-brand-50/60' : 'text-slate-700'
+                      }`}
+                    >
+                      <span>{sub.label}</span>
+                      <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded-full">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Các môn khác trong tổ KHTN */}
+          {['Toán học', 'Tin học', 'Công nghệ'].map((spec) => {
             const count = members.filter((m) => m.specialty === spec).length;
             return (
               <button
                 key={spec}
                 onClick={() => setSelectedSpecialty(spec)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all ${
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all ${
                   selectedSpecialty === spec
-                    ? 'bg-brand-600 text-white shadow-xs'
+                    ? 'bg-slate-800 text-white shadow-xs'
                     : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                 }`}
               >
@@ -311,7 +456,7 @@ export default function MembersPage() {
                   <div className="space-y-2 py-3 border-t border-b border-slate-100 text-xs text-slate-600">
                     <div className="flex items-center space-x-2">
                       <BookOpen className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span>Chuyên môn: <strong>{member.specialty || 'KHTN'}</strong></span>
+                      <span>Chuyên môn: <strong>{member.specialty || 'Khoa học Tự nhiên'}</strong></span>
                     </div>
                     <div className="flex items-center space-x-2 truncate">
                       <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
@@ -348,12 +493,13 @@ export default function MembersPage() {
                         title={member.is_active ? 'Vô hiệu hóa tài khoản' : 'Kích hoạt lại'}
                         className={`p-1.5 rounded-lg border transition-colors ${
                           member.is_active
-                            ? 'text-slate-400 hover:text-rose-600 border-slate-200 hover:bg-rose-50'
+                            ? 'text-slate-400 hover:text-amber-600 border-slate-200 hover:bg-amber-50'
                             : 'text-emerald-600 border-emerald-200 hover:bg-emerald-50'
                         }`}
                       >
                         <UserCheck className="w-3.5 h-3.5" />
                       </button>
+
                       <button
                         onClick={() => handleOpenEditModal(member)}
                         className="p-1.5 text-slate-600 hover:text-brand-600 rounded-lg border border-slate-200 hover:bg-brand-50 transition-colors"
@@ -361,6 +507,17 @@ export default function MembersPage() {
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
+
+                      {/* Nút Xóa Thành Viên - Dành Riêng Cho Quản Trị Viên (Admin) */}
+                      {userRole === 'admin' && (
+                        <button
+                          onClick={() => handleOpenDeleteConfirm(member)}
+                          className="p-1.5 text-rose-500 hover:text-white rounded-lg border border-rose-200 hover:bg-rose-600 transition-colors"
+                          title="Xóa giáo viên khỏi tổ"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -370,7 +527,7 @@ export default function MembersPage() {
         </div>
       )}
 
-      {/* Modal Thêm/Sửa Giáo Viên */}
+      {/* Modal Thêm/Sửa Giáo Viên (Tích Hợp Chọn Phân Môn KHTN) */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -385,6 +542,7 @@ export default function MembersPage() {
               type="text"
               value={formData.full_name}
               onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+              placeholder="VD: Cô Nguyễn Thị Hảo"
               className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
               required
             />
@@ -399,38 +557,74 @@ export default function MembersPage() {
               value={formData.email}
               disabled={!!editingMember}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              placeholder="giaovien@khtn.edu.vn"
               className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 disabled:bg-slate-100"
               required
             />
           </div>
 
+          {/* Chọn Môn Chính & Phân Môn KHTN */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Chuyên Môn</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Môn Giảng Dạy</label>
               <select
-                value={formData.specialty}
-                onChange={(e) => setFormData({ ...formData, specialty: e.target.value })}
-                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                value={mainSubject}
+                onChange={(e) => setMainSubject(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
               >
-                {SPECIALTIES.map((spec) => (
-                  <option key={spec} value={spec}>
-                    {spec}
+                {DEPARTMENT_SUBJECTS.map((subj) => (
+                  <option key={subj} value={subj}>
+                    {subj}
                   </option>
                 ))}
               </select>
             </div>
 
+            {/* Nếu là môn Khoa Học Tự Nhiên -> Hiện Dropdown chọn Phân môn: Vật Lý, Hóa Học, Sinh Học */}
+            {mainSubject === 'Khoa học Tự nhiên' ? (
+              <div className="animate-in fade-in">
+                <label className="block text-xs font-bold text-brand-700 mb-1 flex items-center space-x-1">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Phân Môn KHTN Chuyên Sâu</span>
+                </label>
+                <select
+                  value={khtnSubSpecialty}
+                  onChange={(e) => setKhtnSubSpecialty(e.target.value)}
+                  className="w-full px-3 py-2 bg-brand-50/50 border border-brand-300 rounded-xl text-xs font-bold text-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                >
+                  {KHTN_SUB_SPECIALTIES.map((sub) => (
+                    <option key={sub.value} value={sub.value}>
+                      {sub.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Nhiệm Vụ / Chức Vụ</label>
+                <input
+                  type="text"
+                  value={formData.duties}
+                  onChange={(e) => setFormData({ ...formData, duties: e.target.value })}
+                  placeholder="VD: Giáo viên bộ môn"
+                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                />
+              </div>
+            )}
+          </div>
+
+          {mainSubject === 'Khoa học Tự nhiên' && (
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">Nhiệm Vụ / Chức Vụ</label>
               <input
                 type="text"
                 value={formData.duties}
                 onChange={(e) => setFormData({ ...formData, duties: e.target.value })}
-                placeholder="VD: Tổ trưởng / Thư ký"
+                placeholder="VD: Tổ phó / Thư ký / Giáo viên bộ môn"
                 className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
               />
             </div>
-          </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -499,6 +693,20 @@ export default function MembersPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Modal Xác Nhận Xóa Giáo Viên Dành Cho Admin */}
+      <ConfirmModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setMemberToDelete(null);
+        }}
+        onConfirm={handleExecuteDelete}
+        title="Xác Nhận Xóa Giáo Viên Khỏi Tổ"
+        message={`Bạn có chắc chắn muốn xóa tài khoản của giáo viên "${memberToDelete?.full_name}" (${memberToDelete?.email}) khỏi danh sách Tổ Khoa học Tự nhiên không? Hành động này sẽ gỡ bỏ dữ liệu tài khoản.`}
+        confirmText={deleting ? 'Đang xóa...' : 'Đồng ý xóa'}
+        type="danger"
+      />
     </div>
   );
 }

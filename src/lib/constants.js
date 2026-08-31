@@ -12,15 +12,30 @@ export const ROLE_LABELS = {
   teacher: { label: 'Giáo Viên Tổ KHTN', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' }
 };
 
-// CÁC MÔN HỌC & CHUYÊN MÔN TRONG TỔ KHOA HỌC TỰ NHIÊN (THCS)
-export const SPECIALTIES = [
+// CÁC MÔN HỌC CHÍNH TRONG TỔ KHOA HỌC TỰ NHIÊN (THCS)
+export const DEPARTMENT_SUBJECTS = [
+  'Khoa học Tự nhiên',
   'Toán học',
+  'Tin học',
+  'Công nghệ'
+];
+
+// CÁC PHÂN MÔN CHUYÊN SÂU TRONG MÔN KHOA HỌC TỰ NHIÊN
+export const KHTN_SUB_SPECIALTIES = [
+  { value: 'Khoa học Tự nhiên', label: 'Khoa học Tự nhiên (Chung)' },
+  { value: 'Vật lý', label: 'Phân môn Vật lý' },
+  { value: 'Hóa học', label: 'Phân môn Hóa học' },
+  { value: 'Sinh học', label: 'Phân môn Sinh học' }
+];
+
+export const SPECIALTIES = [
+  'Khoa học Tự nhiên',
   'Vật lý',
   'Hóa học',
   'Sinh học',
+  'Toán học',
   'Tin học',
-  'Công nghệ',
-  'Khoa học Tự nhiên'
+  'Công nghệ'
 ];
 
 export const GRADE_LEVELS = [
