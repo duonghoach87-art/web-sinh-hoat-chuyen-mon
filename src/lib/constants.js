@@ -59,7 +59,8 @@ export const DOCUMENT_CATEGORIES = [
 export const ISSUING_AUTHORITIES = [
   'Bộ Giáo dục & Đào tạo',
   'Sở Giáo dục & Đào tạo',
-  'Phòng Giáo dục & Đào tạo',
+  'Phòng Văn hóa',
+  'UBND xã Sì Lở Lầu',
   'Ban Giám hiệu Nhà trường',
   'Tổ Chuyên môn KHTN'
 ];

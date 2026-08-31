@@ -7,7 +7,7 @@ const SettingsContext = createContext(null);
 const defaultTheme = getMonthlyPedagogicalTheme();
 
 const DEFAULT_SETTINGS = {
-  department_authority: 'PHÒNG GIÁO DỤC VÀ ĐÀO TẠO',
+  department_authority: 'PHÒNG VĂN HÓA',
   school_name: 'TRƯỜNG PTDTBT TH&THCS SÌ LỞ LẦU',
   department_name: 'TỔ KHOA HỌC TỰ NHIÊN',
   school_year: '2026-2027',

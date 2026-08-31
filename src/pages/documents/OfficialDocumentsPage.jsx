@@ -50,7 +50,7 @@ export default function OfficialDocumentsPage() {
     title: '',
     document_number: '',
     category: 'Công văn',
-    issuing_authority: 'Phòng GD&ĐT',
+    issuing_authority: 'Phòng Văn hóa',
     issue_date: new Date().toISOString().split('T')[0],
     description: ''
   });
@@ -81,7 +81,7 @@ export default function OfficialDocumentsPage() {
       title: '',
       document_number: '',
       category: 'Công văn',
-      issuing_authority: 'Phòng GD&ĐT',
+      issuing_authority: 'Phòng Văn hóa',
       issue_date: new Date().toISOString().split('T')[0],
       description: ''
     });
