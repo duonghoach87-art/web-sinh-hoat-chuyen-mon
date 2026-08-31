@@ -41,7 +41,7 @@ export default function DepartmentPlansPage() {
   const [formData, setFormData] = useState({
     title: '',
     plan_type: 'monthly',
-    school_year: '2025-2026',
+    school_year: '2026-2027',
     term: 'Học kỳ 1',
     month: 'Tháng 9',
     week_number: 1,

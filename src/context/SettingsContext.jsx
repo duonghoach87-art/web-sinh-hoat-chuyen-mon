@@ -7,7 +7,7 @@ const DEFAULT_SETTINGS = {
   department_authority: 'PHÒNG GIÁO DỤC VÀ ĐÀO TẠO',
   school_name: 'TRƯỜNG THCS CHU VĂN AN',
   department_name: 'TỔ KHOA HỌC TỰ NHIÊN',
-  school_year: '2025-2026',
+  school_year: '2026-2027',
   active_term: 'Học kỳ 1',
   principal_name: 'Thầy Nguyễn Văn Quản (Hiệu trưởng)',
   head_teacher_name: 'Thầy Dương Văn Hoạch (Tổ trưởng KHTN)',

@@ -49,7 +49,7 @@ export default function ExamBankPage() {
     grade_level: 6,
     subject: 'Khoa học Tự nhiên',
     exam_type: 'mid_term',
-    school_year: '2025-2026'
+    school_year: '2026-2027'
   });
 
   const fetchExams = async () => {

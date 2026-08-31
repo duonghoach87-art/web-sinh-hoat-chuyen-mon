@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useSettings } from '../../context/SettingsContext';
 import {
   LayoutDashboard,
   Info,
@@ -19,6 +20,7 @@ import {
 
 export default function Sidebar({ isOpen, onClose }) {
   const { canManage } = useAuth();
+  const { settings } = useSettings();
 
   const navigationGroups = [
     {
@@ -140,11 +142,11 @@ export default function Sidebar({ isOpen, onClose }) {
           ))}
         </div>
 
-        {/* Sidebar Footer Status */}
+        {/* Sidebar Footer Status - Đồng bộ trực tiếp với Cài Đặt (school_year) */}
         <div className="p-3 bg-slate-950/60 border-t border-slate-800 text-center">
           <div className="flex items-center justify-center space-x-2 text-[11px] text-slate-400">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>Hệ Thống Trực Tuyến 2025-2026</span>
+            <span>Hệ Thống Trực Tuyến {settings?.school_year || '2026-2027'}</span>
           </div>
         </div>
       </aside>

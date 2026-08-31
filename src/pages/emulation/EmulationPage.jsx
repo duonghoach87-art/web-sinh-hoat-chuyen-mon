@@ -46,7 +46,7 @@ export default function EmulationPage() {
     teacher_id: '',
     period_type: 'month',
     period_value: 'Tháng 9',
-    school_year: '2025-2026',
+    school_year: '2026-2027',
     professional_score: 90,
     teaching_score: 90,
     activity_score: 90,
