@@ -3,10 +3,6 @@ import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://oewgdrbxbpgbcnnjqthh.supabase.co';
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-if (!SERVICE_ROLE_KEY) {
-  console.log('Vui lòng thiết lập biến môi trường SUPABASE_SERVICE_ROLE_KEY để chạy script.');
-}
-
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY || 'dummy-key', {
   auth: {
     autoRefreshToken: false,
@@ -15,9 +11,9 @@ const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY || 'dummy-key'
 });
 
 async function createAdminAccount() {
-  const adminEmail = 'admin@khtn.edu.vn';
+  const adminEmail = 'duonghoach87@gmail.com';
   const adminPassword = 'Admin@123456';
-  const adminFullName = 'Cô Nguyễn Thị Hảo (Tổ Trưởng KHTN)';
+  const adminFullName = 'Thầy Dương Văn Hoạch';
 
   console.log(`Đang kiểm tra/tạo tài khoản Quản trị: ${adminEmail}...`);
 
@@ -27,7 +23,7 @@ async function createAdminAccount() {
     return;
   }
 
-  let existingUser = usersData.users.find(u => u.email === adminEmail);
+  let existingUser = usersData.users.find(u => u.email.toLowerCase() === adminEmail.toLowerCase());
   let userId = existingUser ? existingUser.id : null;
 
   if (!existingUser) {
@@ -39,7 +35,7 @@ async function createAdminAccount() {
         full_name: adminFullName,
         role: 'admin',
         specialty: 'Khoa học Tự nhiên',
-        duties: 'Tổ trưởng chuyên môn - Quản trị viên'
+        duties: 'Quản trị viên hệ thống - Ban Giám hiệu'
       }
     });
 
@@ -57,13 +53,13 @@ async function createAdminAccount() {
         full_name: adminFullName,
         role: 'admin',
         specialty: 'Khoa học Tự nhiên',
-        duties: 'Tổ trưởng chuyên môn - Quản trị viên'
+        duties: 'Quản trị viên hệ thống - Ban Giám hiệu'
       }
     });
     if (updateError) {
       console.error('Lỗi khi cập nhật user:', updateError);
     } else {
-      console.log('✅ Đã cập nhật mật khẩu cho user ID:', userId);
+      console.log('✅ Đã cập nhật mật khẩu & quyền cho user ID:', userId);
     }
   }
 
@@ -75,14 +71,14 @@ async function createAdminAccount() {
       full_name: adminFullName,
       role: 'admin',
       specialty: 'Khoa học Tự nhiên',
-      duties: 'Tổ trưởng chuyên môn - Quản trị viên',
+      duties: 'Quản trị viên hệ thống - Ban Giám hiệu',
       is_active: true
     });
 
   if (profileError) {
     console.error('Lỗi khi cập nhật bảng profiles:', profileError);
   } else {
-    console.log('✅ Đã cấp quyền ADMIN tối cao trong bảng profiles thành công!');
+    console.log('✅ Đã cập nhật quyền ADMIN tối cao trong bảng profiles thành công!');
   }
 }
 
