@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useSettings } from '../../context/SettingsContext';
 import { formatDate } from '../../utils/formatDate';
-import { Printer, Download, X, FileText } from 'lucide-react';
+import { Printer, Download, X, FileText, CheckSquare, Square, FileSignature } from 'lucide-react';
 
 export default function PrintReportModal({
   isOpen,
@@ -11,6 +11,7 @@ export default function PrintReportModal({
   data = null
 }) {
   const { settings } = useSettings();
+  const [showSignatures, setShowSignatures] = useState(true);
 
   if (!isOpen || !data) return null;
 
@@ -34,13 +35,27 @@ export default function PrintReportModal({
       <div className="flex min-h-full items-center justify-center p-2 sm:p-6 print:p-0">
         <div className="relative flex flex-col w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200 print:border-0 print:shadow-none print:max-w-none print:w-full print:rounded-none">
           {/* Action Toolbar (Hidden during Print) */}
-          <div className="flex items-center justify-between px-6 py-4 bg-slate-900 text-white print:hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 bg-slate-900 text-white print:hidden">
             <div className="flex items-center space-x-2">
               <FileText className="w-5 h-5 text-brand-400" />
               <span className="font-bold text-sm">Xem Trước Bản In & Xuất PDF</span>
             </div>
 
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-4">
+              {/* Toggle Chữ ký số */}
+              <button
+                type="button"
+                onClick={() => setShowSignatures(!showSignatures)}
+                className="flex items-center space-x-2 text-xs font-semibold text-slate-300 hover:text-white transition-colors"
+              >
+                {showSignatures ? (
+                  <CheckSquare className="w-4 h-4 text-emerald-400" />
+                ) : (
+                  <Square className="w-4 h-4 text-slate-500" />
+                )}
+                <span>Chèn chữ ký điện tử / dấu số</span>
+              </button>
+
               <button
                 onClick={handlePrint}
                 className="flex items-center space-x-1.5 px-4 py-2 bg-brand-600 hover:bg-brand-500 rounded-xl text-xs font-bold text-white transition-all shadow-sm"
@@ -48,6 +63,7 @@ export default function PrintReportModal({
                 <Printer className="w-4 h-4" />
                 <span>Bấm In / Lưu PDF</span>
               </button>
+
               <button
                 onClick={onClose}
                 className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
@@ -57,7 +73,7 @@ export default function PrintReportModal({
             </div>
           </div>
 
-          {/* Printable Document Sheet (Chuẩn Quy cách Văn bản Hành chính) */}
+          {/* Printable Document Sheet (Chuẩn Thể thức Văn bản Hành chính) */}
           <div className="p-8 sm:p-12 text-slate-900 font-serif leading-relaxed bg-white max-h-[80vh] overflow-y-auto print:max-h-none print:overflow-visible print:p-8">
             {/* Header Quốc Huy & Đơn Vị */}
             <div className="grid grid-cols-2 gap-4 pb-6 border-b border-slate-300 text-xs">
@@ -105,8 +121,8 @@ export default function PrintReportModal({
                   <p><strong>2. Địa điểm:</strong> {data.location || 'Phòng Hội đồng Sư phạm'}</p>
                   <p><strong>3. Thành phần tham dự:</strong></p>
                   <ul className="list-disc pl-6 space-y-1 text-xs">
-                    <li>Chủ trì: {data.chairperson || 'Tổ trưởng chuyên môn'}</li>
-                    <li>Thư ký: {data.secretary || 'Thư ký cuộc họp'}</li>
+                    <li>Chủ trì: {data.chairperson || settings?.head_teacher_name || 'Tổ trưởng chuyên môn'}</li>
+                    <li>Thư ký: {data.secretary || settings?.deputy_head_name || 'Thư ký cuộc họp'}</li>
                     <li>Số lượng thành viên có mặt: {data.attendees_count || 11}/11 đồng chí giáo viên.</li>
                   </ul>
 
@@ -211,21 +227,51 @@ export default function PrintReportModal({
               </div>
             )}
 
-            {/* Footer Signatures */}
-            <div className="grid grid-cols-2 gap-8 pt-12 text-center text-xs font-sans">
+            {/* Footer Signatures Block with Digital Signature Stamp */}
+            <div className={`grid ${docType === 'emulation' ? 'grid-cols-3' : 'grid-cols-2'} gap-6 pt-12 text-center text-xs font-sans`}>
+              {/* Cột 1: Người lập biểu / Thư ký */}
               <div>
-                <p className="uppercase font-bold">NGƯỜI LẬP BIỂU / THƯ KÝ</p>
+                <p className="uppercase font-bold">THƯ KÝ / NGƯỜI LẬP</p>
                 <p className="italic text-[11px] text-slate-500">(Ký và ghi rõ họ tên)</p>
-                <div className="h-20" />
-                <p className="font-bold">{data.secretary || '................................'}</p>
+                <div className="h-20 flex items-center justify-center">
+                  {/* Placeholder khoảng trống chữ ký */}
+                </div>
+                <p className="font-bold">{data.secretary || settings?.deputy_head_name || 'Cô Nguyễn Thị Hảo'}</p>
               </div>
 
+              {/* Cột 2: Tổ Trưởng Chuyên Môn */}
               <div>
                 <p className="uppercase font-bold">TỔ TRƯỞNG CHUYÊN MÔN</p>
                 <p className="italic text-[11px] text-slate-500">(Ký và ghi rõ họ tên)</p>
-                <div className="h-20" />
-                <p className="font-bold">{settings?.head_teacher_name || 'Cô Nguyễn Thị Hảo'}</p>
+                <div className="h-20 flex items-center justify-center overflow-hidden">
+                  {showSignatures && settings?.head_signature_url ? (
+                    <img
+                      src={settings.head_signature_url}
+                      alt="Chữ ký Tổ Trưởng"
+                      className="max-h-16 object-contain"
+                    />
+                  ) : null}
+                </div>
+                <p className="font-bold">{settings?.head_teacher_name || 'Thầy Dương Văn Hoạch'}</p>
               </div>
+
+              {/* Cột 3 (Đối với bảng thi đua / kế hoạch năm): Ban Giám Hiệu Phê Duyệt */}
+              {docType === 'emulation' && (
+                <div>
+                  <p className="uppercase font-bold">BAN GIÁM HIỆU DUYỆT</p>
+                  <p className="italic text-[11px] text-slate-500">(Ký và đóng dấu)</p>
+                  <div className="h-20 flex items-center justify-center overflow-hidden">
+                    {showSignatures && settings?.principal_signature_url ? (
+                      <img
+                        src={settings.principal_signature_url}
+                        alt="Dấu / Chữ ký Hiệu Trưởng"
+                        className="max-h-16 object-contain"
+                      />
+                    ) : null}
+                  </div>
+                  <p className="font-bold">{settings?.principal_name || 'Thầy Hiệu Trưởng'}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -41,6 +41,9 @@ CREATE TABLE IF NOT EXISTS public.school_settings (
     active_term TEXT NOT NULL DEFAULT 'Học kỳ 1',
     principal_name TEXT DEFAULT 'Thầy Nguyễn Văn Quản (Hiệu trưởng)',
     head_teacher_name TEXT DEFAULT 'Thầy Dương Văn Hoạch (Tổ trưởng KHTN)',
+    deputy_head_name TEXT DEFAULT 'Cô Nguyễn Thị Hảo (Tổ phó KHTN)',
+    head_signature_url TEXT,
+    principal_signature_url TEXT,
     address TEXT DEFAULT 'Số 123 Đường Giáo Dục, Quận/Huyện...',
     phone_number TEXT DEFAULT '024.3838.xxxx',
     logo_url TEXT,
@@ -48,18 +51,25 @@ CREATE TABLE IF NOT EXISTS public.school_settings (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
+-- Tự động bổ sung các cột nếu bảng đã tồn tại từ trước
+ALTER TABLE public.school_settings 
+ADD COLUMN IF NOT EXISTS deputy_head_name TEXT DEFAULT 'Cô Nguyễn Thị Hảo (Tổ phó KHTN)',
+ADD COLUMN IF NOT EXISTS head_signature_url TEXT,
+ADD COLUMN IF NOT EXISTS principal_signature_url TEXT;
+
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM public.school_settings LIMIT 1) THEN
         INSERT INTO public.school_settings (
-            department_authority, school_name, department_name, school_year, principal_name, head_teacher_name
+            department_authority, school_name, department_name, school_year, principal_name, head_teacher_name, deputy_head_name
         ) VALUES (
             'PHÒNG GIÁO DỤC VÀ ĐÀO TẠO',
             'TRƯỜNG THCS CHU VĂN AN',
             'TỔ KHOA HỌC TỰ NHIÊN',
             '2025-2026',
             'Thầy Nguyễn Văn Quản (Hiệu trưởng)',
-            'Thầy Dương Văn Hoạch (Tổ trưởng KHTN)'
+            'Thầy Dương Văn Hoạch (Tổ trưởng KHTN)',
+            'Cô Nguyễn Thị Hảo (Tổ phó KHTN)'
         );
     END IF;
 END $$;
