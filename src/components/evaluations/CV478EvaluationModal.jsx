@@ -306,8 +306,10 @@ export default function CV478EvaluationModal({
             </div>
 
             <div className="bg-white/80 p-2.5 rounded-xl border border-slate-200/60">
-              <span className="text-[10px] text-slate-400 font-bold uppercase block">Tiết Dạy</span>
-              <strong>Tiết {registration.period_number} (PPCT: {registration.curriculum_period || 1})</strong>
+              <span className="text-[10px] text-slate-400 font-bold uppercase block">Buổi & Tiết Dạy</span>
+              <strong>
+                {registration.lesson_session ? `Buổi ${registration.lesson_session} • ` : ''}Tiết {registration.period_number} (PPCT: {registration.curriculum_period || 1})
+              </strong>
             </div>
 
             <div className="bg-white/80 p-2.5 rounded-xl border border-slate-200/60">

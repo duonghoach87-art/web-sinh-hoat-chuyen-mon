@@ -113,7 +113,10 @@ export default function PrintCV478Modal({
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <p><strong>Lớp:</strong> {registration.classroom}</p>
-                <p><strong>Tiết PPCT:</strong> {registration.period_number}</p>
+                <p>
+                  <strong>Tiết dạy:</strong>{' '}
+                  {registration.lesson_session ? `Buổi ${registration.lesson_session} - ` : ''}Tiết {registration.period_number} (PPCT: {registration.curriculum_period || registration.period_number})
+                </p>
                 <p><strong>Ngày dạy:</strong> {formatDate(registration.teaching_date)}</p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-slate-200/60">

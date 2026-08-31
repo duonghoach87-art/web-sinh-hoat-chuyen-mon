@@ -61,6 +61,7 @@ export default function TeachingRegistrationsPage() {
     subject: 'Khoa học Tự nhiên',
     grade_level: 6,
     teaching_date: new Date().toISOString().split('T')[0],
+    lesson_session: 'Sáng',
     period_number: 1,
     curriculum_period: 1,
     classroom: '6A1',
@@ -110,6 +111,7 @@ export default function TeachingRegistrationsPage() {
       subject: profile?.specialty || 'Khoa học Tự nhiên',
       grade_level: 6,
       teaching_date: new Date().toISOString().split('T')[0],
+      lesson_session: 'Sáng',
       period_number: 1,
       curriculum_period: 1,
       classroom: '6A1',
@@ -140,6 +142,7 @@ export default function TeachingRegistrationsPage() {
         subject: formData.subject || 'Khoa học Tự nhiên',
         grade_level: parseInt(formData.grade_level) || 6,
         teaching_date: formData.teaching_date,
+        lesson_session: formData.lesson_session || 'Sáng',
         period_number: parseInt(formData.period_number) || 1,
         curriculum_period: parseInt(formData.curriculum_period) || 1,
         classroom: formData.classroom?.trim() || '6A1',
@@ -149,12 +152,24 @@ export default function TeachingRegistrationsPage() {
         reviewed_by: isAutoApprove ? currentUserId : null
       };
 
-      const { data: insertedData, error } = await supabase
+      let { data: insertedData, error } = await supabase
         .from('teaching_registrations')
         .insert([newRecord])
         .select('*');
 
-      if (error) throw error;
+      // Dự phòng nếu Supabase chưa thêm cột lesson_session
+      if (error && (error.message?.includes('lesson_session') || error.code === '42703')) {
+        const { lesson_session, ...fallbackRecord } = newRecord;
+        const retry = await supabase
+          .from('teaching_registrations')
+          .insert([fallbackRecord])
+          .select('*');
+        if (retry.error) throw retry.error;
+        insertedData = retry.data;
+        error = null;
+      } else if (error) {
+        throw error;
+      }
 
       setIsModalOpen(false);
       await fetchRegistrations();
@@ -410,18 +425,17 @@ export default function TeachingRegistrationsPage() {
                           <Calendar className="w-3.5 h-3.5 text-brand-500" />
                           <span>{formatDate(reg.teaching_date)}</span>
                         </div>
-                        <div className="text-[11px] text-slate-500 flex items-center space-x-1 mt-0.5">
+                        <div className="text-[11px] text-slate-600 flex items-center space-x-1 mt-0.5 font-medium">
                           <Clock className="w-3 h-3 text-slate-400" />
-                          <span>Tiết {reg.period_number} trong buổi</span>
+                          <span>
+                            {reg.lesson_session ? `Buổi ${reg.lesson_session} • ` : ''}Tiết {reg.period_number}
+                          </span>
                         </div>
                       </td>
 
                       <td className="py-4 px-4 whitespace-nowrap">
                         <span className="font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded text-xs">
-                          {reg.classroom}
-                        </span>
-                        <span className="text-[11px] text-slate-400 ml-1.5">
-                          (Khối {reg.grade_level})
+                          Lớp {reg.classroom}
                         </span>
                       </td>
 
@@ -434,59 +448,44 @@ export default function TeachingRegistrationsPage() {
                       </td>
 
                       <td className="py-4 px-4 whitespace-nowrap">
-                        <span
-                          className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${statusInfo.badge}`}
+                        <Badge
+                          variant={
+                            reg.status === 'approved'
+                              ? 'success'
+                              : reg.status === 'rejected'
+                              ? 'danger'
+                              : 'warning'
+                          }
                         >
                           {statusInfo.label}
-                        </span>
+                        </Badge>
                       </td>
 
-                      <td
-                        className="py-4 px-4 text-right whitespace-nowrap"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <div className="flex items-center justify-end space-x-1.5">
-                          {/* Nút Xem Chi Tiết & Đánh Giá Giờ Dạy Công Văn 478 */}
+                      <td className="py-4 px-4 text-right whitespace-nowrap space-x-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEvaluatingReg(reg);
+                          }}
+                          className="inline-flex items-center space-x-1 px-2.5 py-1 bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200 rounded-lg text-xs font-bold transition-all shadow-xs"
+                          title="Đánh giá giờ dạy theo chuẩn Công văn 478/SGDĐT"
+                        >
+                          <Award className="w-3.5 h-3.5 text-brand-600" />
+                          <span>Đánh giá (CV 478)</span>
+                        </button>
+
+                        {(canManage || isOwner) && (
                           <button
-                            onClick={() => setEvaluatingReg(reg)}
-                            className="p-1.5 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-lg border border-amber-200 transition-colors text-xs font-bold flex items-center space-x-1.5 px-3 shadow-2xs"
-                            title="Mở thông tin chi tiết và phiếu đánh giá 12 tiêu chí (CV 478)"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingReg(reg);
+                            }}
+                            className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg border border-rose-200 transition-colors"
+                            title="Xóa tiết dạy"
                           >
-                            <Award className="w-3.5 h-3.5 text-amber-600" />
-                            <span>Đánh giá (CV 478)</span>
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
-
-                          {canManage && reg.status === 'pending' && (
-                            <>
-                              <button
-                                onClick={() => handleOpenReview(reg, 'approved')}
-                                className="p-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg border border-emerald-200 transition-colors text-xs font-bold flex items-center space-x-1 px-2"
-                                title="Phê duyệt lịch dạy"
-                              >
-                                <CheckCircle className="w-3.5 h-3.5" />
-                                <span>Duyệt</span>
-                              </button>
-                              <button
-                                onClick={() => handleOpenReview(reg, 'rejected')}
-                                className="p-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-lg border border-rose-200 transition-colors text-xs font-bold flex items-center space-x-1 px-2"
-                                title="Từ chối / Đổi ngày"
-                              >
-                                <XCircle className="w-3.5 h-3.5" />
-                                <span>Từ chối</span>
-                              </button>
-                            </>
-                          )}
-
-                          {(canManage || (isOwner && reg.status === 'pending')) && (
-                            <button
-                              onClick={() => setDeletingReg(reg)}
-                              className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg border border-rose-200 transition-colors"
-                              title="Hủy / Xóa đăng ký"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
+                        )}
                       </td>
                     </tr>
                   );
@@ -497,11 +496,12 @@ export default function TeachingRegistrationsPage() {
         </div>
       )}
 
-      {/* Modal Đăng Ký */}
+      {/* Modal Thêm Tiết Dạy Mới */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title="Đăng Ký Tiết Dạy Thao Giảng / Chuyên Đề"
+        maxWidth="max-w-2xl"
       >
         <form onSubmit={handleSaveRegistration} className="space-y-4">
           <div>
@@ -560,10 +560,10 @@ export default function TeachingRegistrationsPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                Ngày Dạy
+                Ngày Dạy <span className="text-rose-500">*</span>
               </label>
               <input
                 type="date"
@@ -574,6 +574,22 @@ export default function TeachingRegistrationsPage() {
                 className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
                 required
               />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Buổi (Sáng/Chiều) <span className="text-rose-500">*</span>
+              </label>
+              <select
+                value={formData.lesson_session || 'Sáng'}
+                onChange={(e) =>
+                  setFormData({ ...formData, lesson_session: e.target.value })
+                }
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+              >
+                <option value="Sáng">Buổi Sáng</option>
+                <option value="Chiều">Buổi Chiều</option>
+              </select>
             </div>
 
             <div>
