@@ -3,6 +3,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { SettingsProvider, useSettings } from './context/SettingsContext';
 import AppRoutes from './routes/AppRoutes';
+import ErrorBoundary from './components/common/ErrorBoundary';
 
 function DocumentTitleSync() {
   const { settings } = useSettings();
@@ -20,13 +21,15 @@ function DocumentTitleSync() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <SettingsProvider>
-        <AuthProvider>
-          <DocumentTitleSync />
-          <AppRoutes />
-        </AuthProvider>
-      </SettingsProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <SettingsProvider>
+          <AuthProvider>
+            <DocumentTitleSync />
+            <AppRoutes />
+          </AuthProvider>
+        </SettingsProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }

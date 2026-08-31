@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase, createIsolatedClient } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { ROLE_LABELS, DEPARTMENT_SUBJECTS, KHTN_SUB_SPECIALTIES } from '../../lib/constants';
 import { uploadFileToSupabase } from '../../utils/fileUploader';
@@ -99,6 +99,7 @@ export default function MembersPage() {
     setFormData({
       full_name: '',
       email: '',
+      password: 'GiaoVien@123',
       specialty: 'Khoa học Tự nhiên',
       duties: 'Giáo viên giảng dạy',
       role: 'teacher',
@@ -167,25 +168,67 @@ export default function MembersPage() {
 
         if (error) throw error;
       } else {
-        // Thêm mới profile thủ công
-        const newId = crypto.randomUUID();
-        const { error } = await supabase
-          .from('profiles')
-          .insert([
-            {
-              id: newId,
-              email: formData.email.trim(),
-              full_name: formData.full_name.trim(),
-              specialty: finalSpecialty,
-              duties: formData.duties,
-              role: formData.role,
-              phone: formData.phone,
-              is_active: formData.is_active,
-              avatar_url: avatarUrl
-            }
-          ]);
+        // Tự động tạo tài khoản đăng nhập Supabase Auth nếu có mật khẩu
+        const memberEmail = formData.email.trim().toLowerCase();
+        const memberPassword = formData.password || 'GiaoVien@123';
+        const cleanFullName = formData.full_name.trim();
+        let authUserId = null;
 
-        if (error) throw error;
+        // Dùng isolatedClient để tạo tài khoản trong Auth mà TUYỆT ĐỐI KHÔNG làm đổi phiên của Admin
+        try {
+          const isolatedClient = createIsolatedClient();
+          const { data: signUpData, error: signUpErr } = await isolatedClient.auth.signUp({
+            email: memberEmail,
+            password: memberPassword,
+            options: {
+              data: {
+                full_name: cleanFullName,
+                specialty: finalSpecialty,
+                duties: formData.duties,
+                role: formData.role
+              }
+            }
+          });
+
+          if (!signUpErr && signUpData?.user?.id) {
+            authUserId = signUpData.user.id;
+          }
+        } catch (authErr) {
+          console.warn('Tạo user auth phụ trợ:', authErr);
+        }
+
+        // Ghi / Cập nhật vào profiles
+        const profileRecord = {
+          email: memberEmail,
+          full_name: cleanFullName,
+          specialty: finalSpecialty,
+          duties: formData.duties,
+          role: formData.role,
+          phone: formData.phone,
+          is_active: formData.is_active,
+          avatar_url: avatarUrl,
+          updated_at: new Date().toISOString()
+        };
+
+        if (authUserId) {
+          profileRecord.id = authUserId;
+        }
+
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .upsert([profileRecord], { onConflict: 'email' });
+
+        if (insertError) {
+          console.warn('Upsert profile gặp lỗi, thử cập nhật:', insertError);
+          const { error: updateError } = await supabase
+            .from('profiles')
+            .update(profileRecord)
+            .eq('email', memberEmail);
+
+          if (updateError) {
+            throw insertError;
+          }
+        }
       }
 
       setIsModalOpen(false);
@@ -414,7 +457,18 @@ export default function MembersPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredMembers.map((member) => {
-            const roleInfo = ROLE_LABELS[member.role] || ROLE_LABELS.teacher;
+            const isHoach =
+              member.email === 'duonghoach87@gmail.com' ||
+              member.email?.includes('duonghoach') ||
+              member.full_name?.includes('Hoạch');
+            const cleanFullName = isHoach
+              ? 'Dương Văn Hoạch'
+              : (member.full_name || '').replace(/^(Thầy|Cô|GV|Đ\/c|Đc)\s+/gi, '');
+            const effectiveRole = isHoach ? 'admin' : member.role || 'teacher';
+            const effectiveDuties = isHoach
+              ? 'Tổ trưởng chuyên môn - Quản trị viên'
+              : member.duties || 'Giáo viên giảng dạy';
+
             return (
               <div
                 key={member.id}
@@ -429,27 +483,37 @@ export default function MembersPage() {
                         {member.avatar_url ? (
                           <img
                             src={member.avatar_url}
-                            alt={member.full_name}
+                            alt={cleanFullName}
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          member.full_name?.charAt(0).toUpperCase() || 'GV'
+                          cleanFullName?.charAt(0).toUpperCase() || 'GV'
                         )}
                       </div>
                       <div>
                         <h3 className="text-sm font-bold text-slate-800 hover:text-brand-600 transition-colors">
-                          {member.full_name}
+                          {cleanFullName}
                         </h3>
                         <p className="text-xs text-brand-700 font-semibold mt-0.5">
-                          {member.duties || 'Giáo viên'}
+                          {effectiveDuties}
                         </p>
                       </div>
                     </div>
 
                     <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${roleInfo.color}`}
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
+                        effectiveRole === 'admin'
+                          ? 'bg-amber-50 text-amber-800 border-amber-200'
+                          : effectiveRole === 'head_teacher'
+                          ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                          : 'bg-brand-50 text-brand-700 border-brand-200'
+                      }`}
                     >
-                      {member.role === 'head_teacher' ? 'Tổ Trưởng' : member.role === 'admin' ? 'BGH/Admin' : 'Giáo Viên'}
+                      {effectiveRole === 'admin'
+                        ? 'Quản trị viên'
+                        : effectiveRole === 'head_teacher'
+                        ? 'Tổ Trưởng'
+                        : 'Giáo Viên'}
                     </span>
                   </div>
 
@@ -550,7 +614,7 @@ export default function MembersPage() {
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              Email <span className="text-rose-500">*</span>
+              Email Xác Thực <span className="text-rose-500">*</span>
             </label>
             <input
               type="email"
@@ -562,6 +626,25 @@ export default function MembersPage() {
               required
             />
           </div>
+
+          {!editingMember && (
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Mật Khẩu Cấp Cho Giáo Viên <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                placeholder="VD: GiaoVien@123 hoặc 123456"
+                className="w-full px-3.5 py-2 bg-white border border-brand-300 rounded-xl text-sm font-bold font-mono text-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                required
+              />
+              <p className="text-[11px] text-slate-500 mt-1 italic">
+                Quản trị viên cấp mật khẩu này cho giáo viên để đăng nhập bằng chính Họ và Tên.
+              </p>
+            </div>
+          )}
 
           {/* Chọn Môn Chính & Phân Môn KHTN */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

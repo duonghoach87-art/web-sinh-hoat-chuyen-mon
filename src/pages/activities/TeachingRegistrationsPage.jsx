@@ -12,7 +12,7 @@ import { createNotification } from '../../utils/notifications';
 import Modal from '../../components/common/Modal';
 import ConfirmModal from '../../components/common/ConfirmModal';
 import PrintReportModal from '../../components/common/PrintReportModal';
-import LessonEvaluationModal from './LessonEvaluationModal';
+import CV478EvaluationModal from '../../components/evaluations/CV478EvaluationModal';
 import SearchBar from '../../components/common/SearchBar';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import EmptyState from '../../components/common/EmptyState';
@@ -31,7 +31,10 @@ import {
   User,
   Star,
   Printer,
-  MessageSquare
+  MessageSquare,
+  Award,
+  Eye,
+  FileCheck2
 } from 'lucide-react';
 
 export default function TeachingRegistrationsPage() {
@@ -67,13 +70,29 @@ export default function TeachingRegistrationsPage() {
   const fetchRegistrations = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('teaching_registrations')
-        .select('*, profiles(full_name, specialty, email)')
-        .order('teaching_date', { ascending: true });
+      // Nạp profiles để map quan hệ an toàn 100%
+      const { data: profData } = await supabase
+        .from('profiles')
+        .select('id, full_name, specialty, email');
+      const profMap = new Map((profData || []).map((p) => [p.id, p]));
 
-      if (error) throw error;
-      setRegistrations(data || []);
+      // Nạp danh sách đăng ký
+      const { data: rawRegs, error: rawError } = await supabase
+        .from('teaching_registrations')
+        .select('*')
+        .order('teaching_date', { ascending: false });
+
+      if (rawError) throw rawError;
+
+      const enriched = (rawRegs || []).map((r) => ({
+        ...r,
+        profiles: profMap.get(r.teacher_id) || {
+          full_name: 'Giáo viên KHTN',
+          specialty: r.subject || 'Khoa học Tự nhiên'
+        }
+      }));
+
+      setRegistrations(enriched);
     } catch (error) {
       console.error('Lỗi tải danh sách thao giảng:', error);
     } finally {
@@ -101,32 +120,58 @@ export default function TeachingRegistrationsPage() {
 
   const handleSaveRegistration = async (e) => {
     e.preventDefault();
-    if (!formData.topic_title.trim() || !user) return;
+    if (!formData.topic_title?.trim()) {
+      alert('Vui lòng nhập Tên bài dạy / Chủ đề thao giảng.');
+      return;
+    }
+
+    const currentUserId = user?.id || (await supabase.auth.getUser())?.data?.user?.id;
+    if (!currentUserId) {
+      alert('Vui lòng đăng nhập để thực hiện đăng ký tiết dạy.');
+      return;
+    }
 
     try {
       setSaving(true);
-      const { error } = await supabase.from('teaching_registrations').insert([
-        {
-          teacher_id: user.id,
-          topic_title: formData.topic_title.trim(),
-          subject: formData.subject,
-          grade_level: parseInt(formData.grade_level),
-          teaching_date: formData.teaching_date,
-          period_number: parseInt(formData.period_number),
-          curriculum_period: parseInt(formData.curriculum_period) || null,
-          classroom: formData.classroom.trim(),
-          type: formData.type,
-          status: 'pending'
-        }
-      ]);
+      const isAutoApprove = canManage || role === 'admin';
+      const newRecord = {
+        teacher_id: currentUserId,
+        topic_title: formData.topic_title.trim(),
+        subject: formData.subject || 'Khoa học Tự nhiên',
+        grade_level: parseInt(formData.grade_level) || 6,
+        teaching_date: formData.teaching_date,
+        period_number: parseInt(formData.period_number) || 1,
+        curriculum_period: parseInt(formData.curriculum_period) || 1,
+        classroom: formData.classroom?.trim() || '6A1',
+        type: formData.type || 'thao_giang',
+        status: isAutoApprove ? 'approved' : 'pending',
+        reviewer_note: isAutoApprove ? 'Tổ trưởng đã duyệt' : null,
+        reviewed_by: isAutoApprove ? currentUserId : null
+      };
+
+      const { data: insertedData, error } = await supabase
+        .from('teaching_registrations')
+        .insert([newRecord])
+        .select('*');
 
       if (error) throw error;
 
       setIsModalOpen(false);
       await fetchRegistrations();
+
+      if (insertedData && insertedData[0]) {
+        const itemWithProfile = {
+          ...insertedData[0],
+          profiles: profile || {
+            full_name: profile?.full_name || 'Giáo viên KHTN',
+            specialty: formData.subject
+          }
+        };
+        setEvaluatingReg(itemWithProfile);
+      }
     } catch (err) {
       console.error('Lỗi khi đăng ký tiết dạy:', err);
-      alert(`Lỗi: ${err.message}`);
+      alert(`Không thể lưu tiết dạy: ${err.message}`);
     } finally {
       setSaving(false);
     }
@@ -143,7 +188,12 @@ export default function TeachingRegistrationsPage() {
     if (!selectedReg) return;
     try {
       setSaving(true);
-      const note = reviewerNote.trim() || (reviewAction === 'approved' ? 'Tổ trưởng đã phê duyệt lịch dạy.' : 'Vui lòng chọn ngày khác hoặc liên hệ tổ trưởng.');
+      const note =
+        reviewerNote?.trim() ||
+        (reviewAction === 'approved'
+          ? 'Tổ trưởng đã phê duyệt lịch dạy.'
+          : 'Vui lòng chọn ngày khác hoặc liên hệ tổ trưởng.');
+
       const { error } = await supabase
         .from('teaching_registrations')
         .update({
@@ -155,11 +205,17 @@ export default function TeachingRegistrationsPage() {
 
       if (error) throw error;
 
-      // Gửi thông báo đến giáo viên
       await createNotification({
         userId: selectedReg.teacher_id,
-        title: reviewAction === 'approved' ? 'Lịch Thao Giảng Đã Được Duyệt' : 'Yêu Cầu Thay Đổi Lịch Dạy',
-        message: `Tiết dạy "${selectedReg.topic_title}" ngày ${formatDate(selectedReg.teaching_date)} đã được ${reviewAction === 'approved' ? 'phê duyệt' : 'từ chối/yêu cầu đổi lịch'}. Ghi chú: ${note}`,
+        title:
+          reviewAction === 'approved'
+            ? 'Lịch Thao Giảng Đã Được Duyệt'
+            : 'Yêu Cầu Thay Đổi Lịch Dạy',
+        message: `Tiết dạy "${selectedReg.topic_title}" ngày ${formatDate(
+          selectedReg.teaching_date
+        )} đã được ${
+          reviewAction === 'approved' ? 'phê duyệt' : 'từ chối/yêu cầu đổi lịch'
+        }. Ghi chú: ${note}`,
         linkUrl: '/teaching-registrations',
         type: 'teaching'
       });
@@ -195,45 +251,54 @@ export default function TeachingRegistrationsPage() {
     }
   };
 
-  const filteredRegistrations = registrations.filter((reg) => {
+  // Hàm lọc tìm kiếm an toàn không bao giờ throw exception
+  const filteredRegistrations = (registrations || []).filter((reg) => {
+    if (!reg) return false;
+    const term = (searchTerm || '').toLowerCase().trim();
+    const topic = (reg.topic_title || '').toLowerCase();
+    const teacher = (reg.profiles?.full_name || '').toLowerCase();
+    const classroom = (reg.classroom || '').toLowerCase();
+
     const matchesSearch =
-      reg.topic_title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      reg.classroom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      reg.profiles?.full_name?.toLowerCase().includes(searchTerm.toLowerCase());
+      !term ||
+      topic.includes(term) ||
+      teacher.includes(term) ||
+      classroom.includes(term);
 
     const matchesStatus =
       selectedStatus === 'ALL' || reg.status === selectedStatus;
-
     const matchesGrade =
-      selectedGrade === 'ALL' || reg.grade_level.toString() === selectedGrade;
+      selectedGrade === 'ALL' || reg.grade_level === parseInt(selectedGrade);
 
     return matchesSearch && matchesStatus && matchesGrade;
   });
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header Page */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
         <div>
           <div className="flex items-center space-x-2 text-brand-600 mb-1">
             <GraduationCap className="w-5 h-5" />
-            <span className="text-xs font-bold uppercase tracking-wider">Thao Giảng & Hội Giảng</span>
+            <span className="text-xs font-bold uppercase tracking-wider">
+              Sinh Hoạt Chuyên Môn & Thao Giảng
+            </span>
           </div>
           <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight">
-            Đăng Ký & Quản Lý Lịch Thao Giảng - Chuyên Đề
+            Đăng Ký & Đánh Giá Giờ Dạy Thao Giảng (Công Văn 478)
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Đăng ký lịch dạy, phê duyệt lịch và đánh giá trực tuyến tiết dự giờ theo Công văn 5512/BGDĐT
+            Tổ chức dự giờ, đăng ký thao giảng và chấm điểm 12 tiêu chí theo hướng dẫn của Sở GD&ĐT Lai Châu
           </p>
         </div>
 
-        <div className="flex items-center space-x-3 shrink-0">
+        <div className="flex items-center space-x-2.5 shrink-0">
           <button
             onClick={() => setIsPrintScheduleOpen(true)}
-            className="inline-flex items-center space-x-1.5 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all"
+            className="inline-flex items-center space-x-2 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all"
           >
-            <Printer className="w-4 h-4 text-slate-500" />
-            <span>In Lịch Phân Công</span>
+            <Printer className="w-4 h-4" />
+            <span>In Lịch Dự Giờ</span>
           </button>
 
           <button
@@ -246,48 +311,49 @@ export default function TeachingRegistrationsPage() {
         </div>
       </div>
 
-      {/* Filter & Search */}
+      {/* Filter & Search Bar */}
       <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
         <SearchBar
           value={searchTerm}
           onChange={setSearchTerm}
-          placeholder="Tìm theo tên bài học, giáo viên, lớp học..."
-          className="w-full sm:max-w-md"
+          placeholder="Tìm theo tên bài dạy, giáo viên, lớp..."
+          className="w-full sm:max-w-xs"
         />
 
-        <div className="flex items-center space-x-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+        <div className="flex items-center space-x-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
           <select
             value={selectedGrade}
             onChange={(e) => setSelectedGrade(e.target.value)}
-            className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+            className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
           >
             <option value="ALL">Tất cả Khối lớp</option>
-            <option value="6">Khối 6</option>
-            <option value="7">Khối 7</option>
-            <option value="8">Khối 8</option>
-            <option value="9">Khối 9</option>
+            {GRADE_LEVELS.map((g) => (
+              <option key={g.value} value={g.value}>
+                {g.label}
+              </option>
+            ))}
           </select>
 
           <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+            className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
           >
             <option value="ALL">Tất cả Trạng thái</option>
-            <option value="pending">Chờ duyệt</option>
-            <option value="approved">Đã duyệt</option>
-            <option value="rejected">Từ chối</option>
+            <option value="pending">Chờ phê duyệt</option>
+            <option value="approved">Đã phê duyệt</option>
+            <option value="rejected">Từ chối / Đổi lịch</option>
           </select>
         </div>
       </div>
 
-      {/* Registrations List / Table */}
+      {/* Table Danh Sách Tiết Dạy */}
       {loading ? (
-        <LoadingSpinner text="Đang tải lịch đăng ký thao giảng..." />
+        <LoadingSpinner text="Đang tải danh sách đăng ký thao giảng..." />
       ) : filteredRegistrations.length === 0 ? (
         <EmptyState
-          title="Chưa có lịch đăng ký nào"
-          description="Hiện chưa có tiết thao giảng nào được đăng ký trong danh sách này."
+          title="Chưa có tiết dạy nào được đăng ký"
+          description="Các thầy cô trong tổ có thể bấm 'Đăng Ký Tiết Thao Giảng' để đăng ký lịch dạy và mời đồng nghiệp dự giờ."
           actionText="Đăng ký tiết dạy ngay"
           onAction={handleOpenAddModal}
           icon={GraduationCap}
@@ -297,47 +363,48 @@ export default function TeachingRegistrationsPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-600 uppercase text-[11px] font-bold tracking-wider">
-                  <th className="py-3.5 px-4">Tên Bài Học / Chủ Đề</th>
+                <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
+                  <th className="py-3.5 px-4">Bài Dạy / Chủ Đề</th>
                   <th className="py-3.5 px-4">Giáo Viên Dạy</th>
                   <th className="py-3.5 px-4">Thời Gian & Tiết</th>
-                  <th className="py-3.5 px-4">Lớp / Khối</th>
+                  <th className="py-3.5 px-4">Lớp Học</th>
                   <th className="py-3.5 px-4">Hình Thức</th>
                   <th className="py-3.5 px-4">Trạng Thái</th>
-                  <th className="py-3.5 px-4 text-right">Đánh Giá & Thao Tác</th>
+                  <th className="py-3.5 px-4 text-right">Thao Tác</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 font-medium">
                 {filteredRegistrations.map((reg) => {
-                  const statusInfo = REGISTRATION_STATUS[reg.status] || REGISTRATION_STATUS.pending;
-                  const typeInfo = TEACHING_REG_TYPES[reg.type] || TEACHING_REG_TYPES.thao_giang;
-                  const isOwner = reg.teacher_id === user?.id;
+                  const typeInfo =
+                    TEACHING_REG_TYPES[reg.type] || TEACHING_REG_TYPES.thao_giang;
+                  const statusInfo =
+                    REGISTRATION_STATUS[reg.status] || REGISTRATION_STATUS.pending;
+                  const isOwner = user?.id === reg.teacher_id;
 
                   return (
-                    <tr key={reg.id} className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-4 px-4 max-w-xs">
-                        <div className="space-y-0.5">
-                          <h4 className="font-bold text-slate-800 text-sm leading-snug">
-                            {reg.topic_title}
-                          </h4>
-                          <span className="text-[11px] text-slate-500 block">
-                            {reg.subject} • Tiết PPCT: {reg.curriculum_period || '---'}
-                          </span>
-                          {reg.reviewer_note && (
-                            <p className="text-[11px] text-slate-500 italic bg-slate-50 p-1 rounded mt-1">
-                              Ý kiến duyệt: {reg.reviewer_note}
-                            </p>
-                          )}
+                    <tr
+                      key={reg.id}
+                      className="hover:bg-slate-50/60 transition-colors group cursor-pointer"
+                      onClick={() => setEvaluatingReg(reg)}
+                    >
+                      <td className="py-4 px-4">
+                        <div className="font-bold text-slate-800 text-sm group-hover:text-brand-600 transition-colors">
+                          {reg.topic_title}
+                        </div>
+                        <div className="text-[11px] text-slate-500 mt-0.5">
+                          Môn: <strong>{reg.subject}</strong> • Tiết PPCT: {reg.curriculum_period || 1}
                         </div>
                       </td>
+
                       <td className="py-4 px-4 whitespace-nowrap">
                         <div className="font-bold text-slate-700">
-                          {reg.profiles?.full_name || 'Giáo viên'}
+                          {reg.profiles?.full_name || 'Giáo viên KHTN'}
                         </div>
                         <div className="text-[11px] text-slate-400">
                           {reg.profiles?.specialty}
                         </div>
                       </td>
+
                       <td className="py-4 px-4 whitespace-nowrap">
                         <div className="font-bold text-brand-700 flex items-center space-x-1">
                           <Calendar className="w-3.5 h-3.5 text-brand-500" />
@@ -348,32 +415,45 @@ export default function TeachingRegistrationsPage() {
                           <span>Tiết {reg.period_number} trong buổi</span>
                         </div>
                       </td>
+
                       <td className="py-4 px-4 whitespace-nowrap">
                         <span className="font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded text-xs">
                           {reg.classroom}
                         </span>
-                        <span className="text-[11px] text-slate-400 ml-1.5">(Khối {reg.grade_level})</span>
+                        <span className="text-[11px] text-slate-400 ml-1.5">
+                          (Khối {reg.grade_level})
+                        </span>
                       </td>
+
                       <td className="py-4 px-4 whitespace-nowrap">
-                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${typeInfo.badge}`}>
+                        <span
+                          className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${typeInfo.badge}`}
+                        >
                           {typeInfo.label}
                         </span>
                       </td>
+
                       <td className="py-4 px-4 whitespace-nowrap">
-                        <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${statusInfo.badge}`}>
+                        <span
+                          className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${statusInfo.badge}`}
+                        >
                           {statusInfo.label}
                         </span>
                       </td>
-                      <td className="py-4 px-4 text-right whitespace-nowrap">
+
+                      <td
+                        className="py-4 px-4 text-right whitespace-nowrap"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <div className="flex items-center justify-end space-x-1.5">
-                          {/* Nút Đánh giá dự giờ CV 5512 */}
+                          {/* Nút Xem Chi Tiết & Đánh Giá Giờ Dạy Công Văn 478 */}
                           <button
                             onClick={() => setEvaluatingReg(reg)}
-                            className="p-1.5 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-lg border border-amber-200 transition-colors text-xs font-bold flex items-center space-x-1 px-2.5"
-                            title="Gửi phiếu đánh giá tiết dạy theo CV 5512"
+                            className="p-1.5 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-lg border border-amber-200 transition-colors text-xs font-bold flex items-center space-x-1.5 px-3 shadow-2xs"
+                            title="Mở thông tin chi tiết và phiếu đánh giá 12 tiêu chí (CV 478)"
                           >
-                            <Star className="w-3.5 h-3.5 text-amber-600 fill-amber-500" />
-                            <span>Đánh giá 5512</span>
+                            <Award className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Đánh giá (CV 478)</span>
                           </button>
 
                           {canManage && reg.status === 'pending' && (
@@ -431,7 +511,9 @@ export default function TeachingRegistrationsPage() {
             <input
               type="text"
               value={formData.topic_title}
-              onChange={(e) => setFormData({ ...formData, topic_title: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, topic_title: e.target.value })
+              }
               placeholder="VD: Bài 12 - Tế bào: Đơn vị cơ sở của sự sống"
               className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
               required
@@ -440,10 +522,14 @@ export default function TeachingRegistrationsPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Phân Môn / Môn Học</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Phân Môn / Môn Học
+              </label>
               <select
                 value={formData.subject}
-                onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, subject: e.target.value })
+                }
                 className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
               >
                 {SPECIALTIES.map((spec) => (
@@ -455,10 +541,14 @@ export default function TeachingRegistrationsPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Khối Lớp</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Khối Lớp
+              </label>
               <select
                 value={formData.grade_level}
-                onChange={(e) => setFormData({ ...formData, grade_level: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, grade_level: e.target.value })
+                }
                 className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
               >
                 {GRADE_LEVELS.map((g) => (
@@ -470,26 +560,34 @@ export default function TeachingRegistrationsPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Ngày Dạy</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Ngày Dạy
+              </label>
               <input
                 type="date"
                 value={formData.teaching_date}
-                onChange={(e) => setFormData({ ...formData, teaching_date: e.target.value })}
-                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                onChange={(e) =>
+                  setFormData({ ...formData, teaching_date: e.target.value })
+                }
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Tiết Trong Buổi</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Tiết Trong Buổi
+              </label>
               <select
                 value={formData.period_number}
-                onChange={(e) => setFormData({ ...formData, period_number: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, period_number: e.target.value })
+                }
                 className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
               >
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((p) => (
+                {[1, 2, 3, 4, 5].map((p) => (
                   <option key={p} value={p}>
                     Tiết {p}
                   </option>
@@ -498,36 +596,48 @@ export default function TeachingRegistrationsPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Tiết PPCT</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Tiết PPCT
+              </label>
               <input
                 type="number"
                 min="1"
                 max="200"
                 value={formData.curriculum_period}
-                onChange={(e) => setFormData({ ...formData, curriculum_period: e.target.value })}
-                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                onChange={(e) =>
+                  setFormData({ ...formData, curriculum_period: e.target.value })
+                }
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Lớp Thực Hiện</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Lớp Thực Hiện
+              </label>
               <input
                 type="text"
                 value={formData.classroom}
-                onChange={(e) => setFormData({ ...formData, classroom: e.target.value })}
-                placeholder="VD: 6A1, 8A3..."
+                onChange={(e) =>
+                  setFormData({ ...formData, classroom: e.target.value })
+                }
+                placeholder="VD: 6A1"
                 className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Hình Thức</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Hình Thức
+              </label>
               <select
                 value={formData.type}
-                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, type: e.target.value })
+                }
                 className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
               >
                 <option value="thao_giang">Thao giảng cấp Tổ</option>
@@ -557,59 +667,73 @@ export default function TeachingRegistrationsPage() {
         </form>
       </Modal>
 
-      {/* Modal Duyệt Thao Giảng */}
-      <Modal
-        isOpen={reviewModalOpen}
-        onClose={() => setReviewModalOpen(false)}
-        title={reviewAction === 'approved' ? 'Phê Duyệt Lịch Thao Giảng' : 'Từ Chối / Yêu Cầu Chỉnh Sửa'}
-        maxWidth="max-w-md"
-      >
-        <div className="space-y-4">
-          <div className="p-3 bg-slate-50 rounded-xl text-xs text-slate-700 border border-slate-100 space-y-1">
-            <p>Bài dạy: <strong>{selectedReg?.topic_title}</strong></p>
-            <p>Giáo viên: <strong>{selectedReg?.profiles?.full_name}</strong></p>
-            <p>Ngày dạy: <strong>{formatDate(selectedReg?.teaching_date)} (Tiết {selectedReg?.period_number}, Lớp {selectedReg?.classroom})</strong></p>
-          </div>
+      {/* Modal Phê Duyệt Lịch Thao Giảng */}
+      {selectedReg && (
+        <Modal
+          isOpen={reviewModalOpen}
+          onClose={() => {
+            setReviewModalOpen(false);
+            setSelectedReg(null);
+          }}
+          title={
+            reviewAction === 'approved'
+              ? 'Phê Duyệt Lịch Dạy Thao Giảng'
+              : 'Từ Chối / Yêu Cầu Thay Đổi Lịch'
+          }
+        >
+          <div className="space-y-4">
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Bạn đang thực hiện {reviewAction === 'approved' ? 'duyệt' : 'từ chối'} lịch dạy tiết{' '}
+              <strong>"{selectedReg.topic_title}"</strong> của giáo viên{' '}
+              <strong>{selectedReg.profiles?.full_name}</strong>.
+            </p>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              Ghi Chú / Ý Kiến Của Tổ Trưởng
-            </label>
-            <textarea
-              rows={3}
-              value={reviewerNote}
-              onChange={(e) => setReviewerNote(e.target.value)}
-              placeholder="Nhập ghi chú chỉ đạo hoặc lý do thay đổi lịch..."
-              className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
-            />
-          </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Ghi Chú Của Tổ Trưởng / Người Phê Duyệt
+              </label>
+              <textarea
+                rows={3}
+                value={reviewerNote}
+                onChange={(e) => setReviewerNote(e.target.value)}
+                placeholder="VD: Đã duyệt phân công Thầy Tuấn, Cô Hảo dự giờ..."
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+              />
+            </div>
 
-          <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={() => setReviewModalOpen(false)}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl"
-            >
-              Hủy
-            </button>
-            <button
-              type="button"
-              onClick={handleConfirmReview}
-              disabled={saving}
-              className={`px-4 py-2 text-xs font-bold text-white rounded-xl shadow-xs ${
-                reviewAction === 'approved'
-                  ? 'bg-emerald-600 hover:bg-emerald-700'
-                  : 'bg-rose-600 hover:bg-rose-700'
-              }`}
-            >
-              {saving ? 'Đang lưu...' : reviewAction === 'approved' ? 'Xác Nhận Phê Duyệt' : 'Xác Nhận Từ Chối'}
-            </button>
+            <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setReviewModalOpen(false);
+                  setSelectedReg(null);
+                }}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+              >
+                Đóng
+              </button>
+              <button
+                onClick={handleConfirmReview}
+                disabled={saving}
+                className={`px-5 py-2 text-xs font-bold text-white rounded-xl shadow-md transition-all ${
+                  reviewAction === 'approved'
+                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                    : 'bg-rose-600 hover:bg-rose-700'
+                }`}
+              >
+                {saving
+                  ? 'Đang lưu...'
+                  : reviewAction === 'approved'
+                  ? 'Xác Nhận Phê Duyệt'
+                  : 'Xác Nhận Từ Chối'}
+              </button>
+            </div>
           </div>
-        </div>
-      </Modal>
+        </Modal>
+      )}
 
-      {/* Modal Đánh Giá Dự Giờ Theo CV 5512 */}
-      <LessonEvaluationModal
+      {/* Modal Chi Tiết & Đánh Giá Giờ Dạy Theo Chuẩn Công Văn 478 (Sở GD&ĐT Lai Châu) */}
+      <CV478EvaluationModal
         isOpen={!!evaluatingReg}
         onClose={() => setEvaluatingReg(null)}
         registration={evaluatingReg}

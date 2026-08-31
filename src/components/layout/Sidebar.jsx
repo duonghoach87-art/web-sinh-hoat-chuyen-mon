@@ -32,7 +32,7 @@ export default function Sidebar({ isOpen, onClose }) {
     {
       group: 'Tổ Chuyên Môn & Nhân Sự',
       items: [
-        { name: 'Giới Thiệu Tổ KHTN (TT 32)', path: '/intro', icon: Info },
+        { name: 'Giới Thiệu Tổ KHTN (TT 15)', path: '/intro', icon: Info },
         { name: 'Danh Sách Giáo Viên', path: '/members', icon: Users }
       ]
     },

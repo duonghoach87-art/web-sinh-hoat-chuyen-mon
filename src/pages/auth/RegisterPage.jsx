@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { DEPARTMENT_SUBJECTS, KHTN_SUB_SPECIALTIES } from '../../lib/constants';
@@ -19,14 +19,39 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { register } = useAuth();
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const { user, register, signInWithGoogle, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+
+  // Tự động chuyển hướng ngay vào Trang Chủ khi đã đăng nhập (bao gồm cả Google chuyển hướng về)
+  useEffect(() => {
+    if (user && !authLoading) {
+      navigate('/', { replace: true });
+    }
+  }, [user, authLoading, navigate]);
 
   const handleChange = (e) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
     });
+  };
+
+  const handleGoogleSignIn = async () => {
+    setError('');
+    try {
+      setGoogleLoading(true);
+      await signInWithGoogle();
+    } catch (err) {
+      console.error('Lỗi đăng ký Google:', err);
+      if (err.message?.includes('provider is not enabled')) {
+        setError('Google Provider chưa được kích hoạt trong trang quản trị Supabase. Quý thầy cô vui lòng kích hoạt theo hướng dẫn.');
+      } else {
+        setError(err.message || 'Không thể kết nối với dịch vụ đăng ký Google. Vui lòng thử lại.');
+      }
+    } finally {
+      setGoogleLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -106,6 +131,46 @@ export default function RegisterPage() {
             </div>
           )}
 
+          {/* Nút Đăng Ký Nhanh Bằng Google */}
+          <button
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={googleLoading || loading}
+            className="w-full py-2.5 px-4 bg-white hover:bg-slate-50 active:bg-slate-100 border border-slate-300 text-slate-700 rounded-xl text-xs font-bold shadow-2xs hover:shadow-xs transition-all flex items-center justify-center space-x-2.5 disabled:opacity-50"
+          >
+            <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+              <path
+                fill="#EA4335"
+                d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.3 9 5 12 5z"
+              />
+              <path
+                fill="#4285F4"
+                d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12.3 0 15.2s.7 5.5 1.9 7.9l3.7-2.9z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 23.5c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.3-6.4-5.2L1.9 16.5C3.7 20.2 7.5 23.5 12 23.5z"
+              />
+            </svg>
+            <span>{googleLoading ? 'Đang kết nối Google...' : 'Đăng ký nhanh bằng tài khoản Google'}</span>
+          </button>
+
+          {/* Đường Phân Cách */}
+          <div className="relative my-5">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-200" />
+            </div>
+            <div className="relative flex justify-center text-[11px]">
+              <span className="bg-white px-3 text-slate-400 font-medium">
+                Hoặc điền biểu mẫu đăng ký
+              </span>
+            </div>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wider">
@@ -179,8 +244,8 @@ export default function RegisterPage() {
                     className="w-full px-3 py-2.5 bg-brand-50/50 border border-brand-300 rounded-xl text-xs font-bold text-brand-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
                   >
                     {KHTN_SUB_SPECIALTIES.map((sub) => (
-                      <option key={sub.value} value={sub.value}>
-                        {sub.label}
+                      <option key={sub} value={sub}>
+                        {sub}
                       </option>
                     ))}
                   </select>
@@ -188,7 +253,7 @@ export default function RegisterPage() {
               ) : (
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wider">
-                    Nhiệm Vụ / Chức Vụ
+                    Nhiệm Vụ Trong Tổ
                   </label>
                   <input
                     type="text"
@@ -196,7 +261,7 @@ export default function RegisterPage() {
                     value={formData.duties}
                     onChange={handleChange}
                     placeholder="VD: Giáo viên bộ môn"
-                    className="w-full px-3.5 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
+                    className="w-full px-3 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
                   />
                 </div>
               )}
@@ -205,15 +270,15 @@ export default function RegisterPage() {
             {mainSubject === 'Khoa học Tự nhiên' && (
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wider">
-                  Nhiệm Vụ / Chức Vụ
+                  Nhiệm Vụ Trong Tổ
                 </label>
                 <input
                   type="text"
                   name="duties"
                   value={formData.duties}
                   onChange={handleChange}
-                  placeholder="VD: Tổ phó / Thư ký / Giáo viên giảng dạy"
-                  className="w-full px-3.5 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
+                  placeholder="VD: Giáo viên giảng dạy phân môn Hóa học"
+                  className="w-full px-3 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
                 />
               </div>
             )}
@@ -232,7 +297,7 @@ export default function RegisterPage() {
                     name="password"
                     value={formData.password}
                     onChange={handleChange}
-                    placeholder="••••••••"
+                    placeholder="Tối thiểu 6 ký tự"
                     className="w-full pl-10 pr-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
                     required
                   />
@@ -252,7 +317,7 @@ export default function RegisterPage() {
                     name="confirmPassword"
                     value={formData.confirmPassword}
                     onChange={handleChange}
-                    placeholder="••••••••"
+                    placeholder="Nhập lại mật khẩu"
                     className="w-full pl-10 pr-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
                     required
                   />
@@ -262,18 +327,24 @@ export default function RegisterPage() {
 
             <button
               type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-600/25 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 mt-6"
+              disabled={loading || googleLoading}
+              className="w-full mt-2 py-3 px-4 bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white rounded-xl text-sm font-bold shadow-md shadow-brand-600/25 transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
             >
-              <UserPlus className="w-4 h-4" />
-              <span>{loading ? 'Đang tạo tài khoản...' : 'Hoàn Tất Đăng Ký Tài Khoản'}</span>
+              {loading ? (
+                <span>Đang xử lý đăng ký...</span>
+              ) : (
+                <>
+                  <UserPlus className="w-4 h-4" />
+                  <span>Hoàn Tất Đăng Ký Thành Viên</span>
+                </>
+              )}
             </button>
           </form>
 
           <div className="mt-6 pt-5 border-t border-slate-100 text-center">
             <p className="text-xs text-slate-500">
               Đã có tài khoản thành viên?{' '}
-              <Link to="/login" className="font-bold text-brand-600 hover:underline">
+              <Link to="/login" className="font-bold text-brand-600 hover:text-brand-700 hover:underline">
                 Đăng nhập ngay
               </Link>
             </p>

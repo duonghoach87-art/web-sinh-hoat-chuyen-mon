@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { useSettings } from '../../context/SettingsContext';
 import { EMULATION_RANKS } from '../../lib/constants';
 import { formatDate } from '../../utils/formatDate';
 import { broadcastNotification } from '../../utils/notifications';
@@ -23,12 +24,31 @@ import {
   TrendingUp,
   User,
   Calendar,
-  Printer
+  Printer,
+  ShieldAlert,
+  Calculator,
+  Info,
+  Layers
 } from 'lucide-react';
 
+export const TERM_1_MONTHS = ['Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12', 'Tháng 1'];
+export const TERM_2_MONTHS = ['Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5'];
+
+export function calculateEmulationRank(score) {
+  const s = parseFloat(score) || 0;
+  if (s >= 90) return 'Xuất sắc';
+  if (s >= 80) return 'Tốt';
+  if (s >= 65) return 'Khá';
+  if (s >= 50) return 'Đạt';
+  return 'Chưa đạt';
+}
+
 export default function EmulationPage() {
-  const { user, canManage, role } = useAuth();
-  const [emulations, setEmulations] = useState([]);
+  const { user, role } = useAuth();
+  const { settings } = useSettings();
+  const isAdmin = role === 'admin'; // Chỉ Admin (Tổ trưởng - Thầy Hoạch) mới có quyền chấm điểm, sửa, xóa thi đua
+
+  const [allRawEmulations, setAllRawEmulations] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPeriodType, setSelectedPeriodType] = useState('month'); // 'month' | 'term' | 'year'
@@ -46,7 +66,7 @@ export default function EmulationPage() {
     teacher_id: '',
     period_type: 'month',
     period_value: 'Tháng 9',
-    school_year: '2026-2027',
+    school_year: settings?.school_year || '2026-2027',
     professional_score: 90,
     teaching_score: 90,
     activity_score: 90,
@@ -55,54 +75,227 @@ export default function EmulationPage() {
     is_published: true
   });
 
-  const fetchTeachers = async () => {
-    try {
-      const { data } = await supabase
-        .from('profiles')
-        .select('id, full_name, specialty')
-        .eq('is_active', true)
-        .order('full_name', { ascending: true });
-      setTeachers(data || []);
-    } catch (err) {
-      console.error('Lỗi tải danh sách giáo viên:', err);
-    }
-  };
-
-  const fetchEmulations = async () => {
+  // Nạp danh sách giáo viên
+  const fetchTeachersAndData = async () => {
     try {
       setLoading(true);
-      let query = supabase
-        .from('emulations')
-        .select('*, profiles:teacher_id(full_name, specialty, email)')
-        .eq('period_type', selectedPeriodType)
-        .eq('period_value', selectedPeriodValue)
-        .order('total_score', { ascending: false });
+      const [teacherRes, emulRes] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('id, full_name, specialty, email')
+          .order('full_name', { ascending: true }),
+        supabase
+          .from('emulations')
+          .select('*, profiles:teacher_id(full_name, specialty, email)')
+          .order('created_at', { ascending: false })
+      ]);
 
-      const { data, error } = await query;
-      if (error) throw error;
-      setEmulations(data || []);
-    } catch (error) {
-      console.error('Lỗi tải bảng thi đua:', error);
+      setTeachers(teacherRes.data || []);
+      setAllRawEmulations(emulRes.data || []);
+    } catch (err) {
+      console.error('Lỗi tải dữ liệu thi đua:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchTeachers();
+    fetchTeachersAndData();
   }, []);
 
-  useEffect(() => {
-    fetchEmulations();
-  }, [selectedPeriodType, selectedPeriodValue]);
+  // Tính toán bảng điểm thi đua hiển thị (Tháng / Học kỳ TBC / Cả năm TBC)
+  const computeDisplayEmulations = () => {
+    const profMap = new Map(teachers.map((t) => [t.id, t]));
+
+    // 1. TRƯỜNG HỢP: XEM THEO THÁNG (Month)
+    if (selectedPeriodType === 'month') {
+      return allRawEmulations
+        .filter(
+          (e) => e.period_type === 'month' && e.period_value === selectedPeriodValue
+        )
+        .map((e) => ({
+          ...e,
+          profiles: e.profiles || profMap.get(e.teacher_id) || { full_name: 'Giáo viên' }
+        }))
+        .sort((a, b) => (b.total_score || 0) - (a.total_score || 0));
+    }
+
+    // 2. TRƯỜNG HỢP: XEM THEO HỌC KỲ (Term 1: T9 - T1 | Term 2: T2 - T5)
+    if (selectedPeriodType === 'term') {
+      const isTerm1 = selectedPeriodValue === 'Học kỳ 1';
+      const targetMonths = isTerm1 ? TERM_1_MONTHS : TERM_2_MONTHS;
+      const maxMonths = targetMonths.length;
+
+      const result = [];
+
+      teachers.forEach((teacher) => {
+        const teacherMonthlyRecords = allRawEmulations.filter(
+          (e) =>
+            e.teacher_id === teacher.id &&
+            e.period_type === 'month' &&
+            targetMonths.includes(e.period_value)
+        );
+
+        if (teacherMonthlyRecords.length > 0) {
+          const count = teacherMonthlyRecords.length;
+          const sumProf = teacherMonthlyRecords.reduce(
+            (acc, curr) => acc + (parseFloat(curr.professional_score) || 0),
+            0
+          );
+          const sumTeach = teacherMonthlyRecords.reduce(
+            (acc, curr) => acc + (parseFloat(curr.teaching_score) || 0),
+            0
+          );
+          const sumAct = teacherMonthlyRecords.reduce(
+            (acc, curr) => acc + (parseFloat(curr.activity_score) || 0),
+            0
+          );
+          const sumTotal = teacherMonthlyRecords.reduce(
+            (acc, curr) => acc + (parseFloat(curr.total_score) || 0),
+            0
+          );
+
+          const avgProf = parseFloat((sumProf / count).toFixed(2));
+          const avgTeach = parseFloat((sumTeach / count).toFixed(2));
+          const avgAct = parseFloat((sumAct / count).toFixed(2));
+          const avgTotal = parseFloat((sumTotal / count).toFixed(2));
+          const rank = calculateEmulationRank(avgTotal);
+          const monthsListStr = teacherMonthlyRecords.map((r) => r.period_value).join(', ');
+
+          result.push({
+            id: `term_${teacher.id}_${selectedPeriodValue}`,
+            teacher_id: teacher.id,
+            profiles: teacher,
+            period_type: 'term',
+            period_value: selectedPeriodValue,
+            school_year: settings?.school_year || '2026-2027',
+            professional_score: avgProf,
+            teaching_score: avgTeach,
+            activity_score: avgAct,
+            total_score: avgTotal,
+            rank: rank,
+            notes: `Điểm TBC từ ${count}/${maxMonths} tháng (${monthsListStr})`,
+            is_aggregated: true,
+            months_count: count,
+            max_months: maxMonths
+          });
+        }
+      });
+
+      return result.sort((a, b) => b.total_score - a.total_score);
+    }
+
+    // 3. TRƯỜNG HỢP: XEM CẢ NĂM HỌC (Trung bình cộng của 2 học kỳ)
+    if (selectedPeriodType === 'year') {
+      const result = [];
+
+      teachers.forEach((teacher) => {
+        // Lấy các tháng HKI (T9 -> T1)
+        const term1Records = allRawEmulations.filter(
+          (e) =>
+            e.teacher_id === teacher.id &&
+            e.period_type === 'month' &&
+            TERM_1_MONTHS.includes(e.period_value)
+        );
+
+        // Lấy các tháng HKII (T2 -> T5)
+        const term2Records = allRawEmulations.filter(
+          (e) =>
+            e.teacher_id === teacher.id &&
+            e.period_type === 'month' &&
+            TERM_2_MONTHS.includes(e.period_value)
+        );
+
+        let term1Avg = null;
+        let term2Avg = null;
+
+        if (term1Records.length > 0) {
+          term1Avg = {
+            prof: term1Records.reduce((s, r) => s + (parseFloat(r.professional_score) || 0), 0) / term1Records.length,
+            teach: term1Records.reduce((s, r) => s + (parseFloat(r.teaching_score) || 0), 0) / term1Records.length,
+            act: term1Records.reduce((s, r) => s + (parseFloat(r.activity_score) || 0), 0) / term1Records.length,
+            total: term1Records.reduce((s, r) => s + (parseFloat(r.total_score) || 0), 0) / term1Records.length,
+            count: term1Records.length
+          };
+        }
+
+        if (term2Records.length > 0) {
+          term2Avg = {
+            prof: term2Records.reduce((s, r) => s + (parseFloat(r.professional_score) || 0), 0) / term2Records.length,
+            teach: term2Records.reduce((s, r) => s + (parseFloat(r.teaching_score) || 0), 0) / term2Records.length,
+            act: term2Records.reduce((s, r) => s + (parseFloat(r.activity_score) || 0), 0) / term2Records.length,
+            total: term2Records.reduce((s, r) => s + (parseFloat(r.total_score) || 0), 0) / term2Records.length,
+            count: term2Records.length
+          };
+        }
+
+        // Tính TBC cả năm
+        if (term1Avg || term2Avg) {
+          let yearProf, yearTeach, yearAct, yearTotal, noteStr;
+
+          if (term1Avg && term2Avg) {
+            // Có đủ cả 2 học kỳ: TBC = (HKI + HKII) / 2
+            yearProf = parseFloat(((term1Avg.prof + term2Avg.prof) / 2).toFixed(2));
+            yearTeach = parseFloat(((term1Avg.teach + term2Avg.teach) / 2).toFixed(2));
+            yearAct = parseFloat(((term1Avg.act + term2Avg.act) / 2).toFixed(2));
+            yearTotal = parseFloat(((term1Avg.total + term2Avg.total) / 2).toFixed(2));
+            noteStr = `TBC Cả năm = [HKI (${term1Avg.total.toFixed(2)}đ) + HKII (${term2Avg.total.toFixed(2)}đ)] / 2`;
+          } else if (term1Avg) {
+            // Mới có HKI
+            yearProf = parseFloat(term1Avg.prof.toFixed(2));
+            yearTeach = parseFloat(term1Avg.teach.toFixed(2));
+            yearAct = parseFloat(term1Avg.act.toFixed(2));
+            yearTotal = parseFloat(term1Avg.total.toFixed(2));
+            noteStr = `Tạm tính theo HKI (${term1Avg.total.toFixed(2)}đ - ${term1Avg.count}/5 tháng) • Chưa có điểm HKII`;
+          } else {
+            // Mới có HKII
+            yearProf = parseFloat(term2Avg.prof.toFixed(2));
+            yearTeach = parseFloat(term2Avg.teach.toFixed(2));
+            yearAct = parseFloat(term2Avg.act.toFixed(2));
+            yearTotal = parseFloat(term2Avg.total.toFixed(2));
+            noteStr = `Tạm tính theo HKII (${term2Avg.total.toFixed(2)}đ - ${term2Avg.count}/4 tháng) • Chưa có điểm HKI`;
+          }
+
+          const rank = calculateEmulationRank(yearTotal);
+
+          result.push({
+            id: `year_${teacher.id}`,
+            teacher_id: teacher.id,
+            profiles: teacher,
+            period_type: 'year',
+            period_value: `Năm học ${settings?.school_year || '2026-2027'}`,
+            school_year: settings?.school_year || '2026-2027',
+            professional_score: yearProf,
+            teaching_score: yearTeach,
+            activity_score: yearAct,
+            total_score: yearTotal,
+            rank: rank,
+            notes: noteStr,
+            is_aggregated: true,
+            has_both_terms: !!(term1Avg && term2Avg)
+          });
+        }
+      });
+
+      return result.sort((a, b) => b.total_score - a.total_score);
+    }
+
+    return [];
+  };
+
+  const currentDisplayEmulations = computeDisplayEmulations();
 
   const handleOpenAddModal = () => {
+    if (!isAdmin) {
+      alert('Chỉ Quản trị viên (Admin - Tổ trưởng) mới có quyền chấm điểm thi đua.');
+      return;
+    }
     setEditingItem(null);
     setFormData({
       teacher_id: teachers[0]?.id || '',
-      period_type: selectedPeriodType,
-      period_value: selectedPeriodValue,
-      school_year: '2025-2026',
+      period_type: 'month',
+      period_value: selectedPeriodType === 'month' ? selectedPeriodValue : 'Tháng 9',
+      school_year: settings?.school_year || '2026-2027',
       professional_score: 90,
       teaching_score: 90,
       activity_score: 90,
@@ -114,12 +307,20 @@ export default function EmulationPage() {
   };
 
   const handleOpenEditModal = (item) => {
+    if (!isAdmin) {
+      alert('Chỉ Quản trị viên (Admin - Tổ trưởng) mới có quyền chỉnh sửa điểm thi đua.');
+      return;
+    }
+    if (item.is_aggregated) {
+      alert('Điểm học kỳ và cả năm được hệ thống tự động tính từ trung bình cộng của các tháng. Bạn hãy chuyển sang tab "Theo Tháng" để sửa điểm của từng tháng tương ứng.');
+      return;
+    }
     setEditingItem(item);
     setFormData({
       teacher_id: item.teacher_id,
       period_type: item.period_type,
       period_value: item.period_value,
-      school_year: item.school_year || '2025-2026',
+      school_year: item.school_year || settings?.school_year || '2026-2027',
       professional_score: item.professional_score || 0,
       teaching_score: item.teaching_score || 0,
       activity_score: item.activity_score || 0,
@@ -139,6 +340,11 @@ export default function EmulationPage() {
 
   const handleSaveEmulation = async (e) => {
     e.preventDefault();
+    if (!isAdmin) {
+      alert('Chỉ Quản trị viên (Admin - Tổ trưởng) mới có quyền lưu điểm thi đua.');
+      return;
+    }
+
     if (!formData.teacher_id) {
       alert('Vui lòng chọn giáo viên để chấm điểm thi đua!');
       return;
@@ -202,7 +408,7 @@ export default function EmulationPage() {
       }
 
       setIsModalOpen(false);
-      await fetchEmulations();
+      await fetchTeachersAndData();
     } catch (err) {
       console.error('Lỗi lưu thi đua:', err);
       alert(`Lỗi: ${err.message}`);
@@ -213,6 +419,11 @@ export default function EmulationPage() {
 
   const handleDeleteEmulation = async () => {
     if (!deletingItem) return;
+    if (!isAdmin) {
+      alert('Chỉ Quản trị viên (Admin - Tổ trưởng) mới có quyền xóa kết quả thi đua.');
+      return;
+    }
+
     try {
       setSaving(true);
       const { error } = await supabase
@@ -222,7 +433,7 @@ export default function EmulationPage() {
 
       if (error) throw error;
       setDeletingItem(null);
-      await fetchEmulations();
+      await fetchTeachersAndData();
     } catch (err) {
       console.error('Lỗi khi xóa kết quả thi đua:', err);
       alert(`Lỗi: ${err.message}`);
@@ -231,11 +442,12 @@ export default function EmulationPage() {
     }
   };
 
-  const filteredEmulations = emulations.filter((item) => {
-    return (
-      item.profiles?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.notes?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+  const filteredEmulations = currentDisplayEmulations.filter((item) => {
+    if (!item) return false;
+    const term = (searchTerm || '').toLowerCase().trim();
+    const name = (item.profiles?.full_name || '').toLowerCase();
+    const notes = (item.notes || '').toLowerCase();
+    return !term || name.includes(term) || notes.includes(term);
   });
 
   const getRankBadge = (rank) => {
@@ -266,7 +478,7 @@ export default function EmulationPage() {
             Thi Đua & Xếp Loại Tổ Chuyên Môn KHTN
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Theo dõi, chấm điểm thi đua hồ sơ chuyên môn, thao giảng và biểu đồ phân tích thành tích giáo viên
+            Chấm điểm thi đua hàng tháng • Tự động tính Trung bình cộng Học kỳ (HKI: T9-T1, HKII: T2-T5) & Cả năm học
           </p>
         </div>
 
@@ -279,13 +491,14 @@ export default function EmulationPage() {
             <span>In Bảng Thi Đua</span>
           </button>
 
-          {canManage && (
+          {/* CHỈ ADMIN (TỔ TRƯỞNG - THẦY HOẠCH) MỚI NHÌN THẤY NÚT CHẤM ĐIỂM */}
+          {isAdmin && (
             <button
               onClick={handleOpenAddModal}
               className="inline-flex items-center space-x-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-600/20 transition-all"
             >
               <Plus className="w-4 h-4" />
-              <span>Chấm Điểm Thi Đua</span>
+              <span>Chấm Điểm Thi Đua (Tháng)</span>
             </button>
           )}
         </div>
@@ -316,18 +529,18 @@ export default function EmulationPage() {
                 selectedPeriodType === 'term' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              Theo Học Kỳ
+              Theo Học Kỳ (Tự Động TBC)
             </button>
             <button
               onClick={() => {
                 setSelectedPeriodType('year');
-                setSelectedPeriodValue('Năm học 2025-2026');
+                setSelectedPeriodValue(`Năm học ${settings?.school_year || '2026-2027'}`);
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 selectedPeriodType === 'year' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              Cả Năm Học
+              Cả Năm Học (TBC 2 Học Kỳ)
             </button>
           </div>
 
@@ -343,7 +556,7 @@ export default function EmulationPage() {
                       onClick={() => setSelectedPeriodValue(val)}
                       className={`px-3 py-1 rounded-lg text-xs font-semibold shrink-0 transition-all ${
                         selectedPeriodValue === val
-                          ? 'bg-brand-600 text-white'
+                          ? 'bg-brand-600 text-white shadow-2xs'
                           : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
                       }`}
                     >
@@ -360,19 +573,45 @@ export default function EmulationPage() {
                   <button
                     key={t}
                     onClick={() => setSelectedPeriodValue(t)}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
                       selectedPeriodValue === t
-                        ? 'bg-brand-600 text-white'
-                        : 'bg-slate-50 text-slate-600 border border-slate-200'
+                        ? 'bg-brand-600 text-white shadow-2xs'
+                        : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
                     }`}
                   >
-                    {t}
+                    {t} {t === 'Học kỳ 1' ? '(T9 đến T1)' : '(T2 đến T5)'}
                   </button>
                 ))}
               </div>
             )}
           </div>
         </div>
+
+        {/* Khung Thông Báo Công Thức Tự Động Tính Điểm */}
+        {selectedPeriodType !== 'month' && (
+          <div className="p-3 bg-brand-50/80 border border-brand-200 rounded-xl flex items-center justify-between gap-3 text-xs text-brand-900 animate-in fade-in">
+            <div className="flex items-center space-x-2">
+              <Calculator className="w-4 h-4 text-brand-600 shrink-0" />
+              <span>
+                {selectedPeriodType === 'term' ? (
+                  <>
+                    <strong>Công thức tự động:</strong> Điểm {selectedPeriodValue} = Điểm Trung Bình Cộng (TBC) của các tháng{' '}
+                    {selectedPeriodValue === 'Học kỳ 1' ? 'Học kỳ I (Tháng 9 đến Tháng 1)' : 'Học kỳ II (Tháng 2 đến Tháng 5)'}.
+                  </>
+                ) : (
+                  <>
+                    <strong>Công thức tự động:</strong> Điểm thi đua Cả Năm Học = Điểm Trung Bình Cộng của cả hai học kỳ{' '}
+                    <strong>(Điểm HKI + Điểm HKII) / 2</strong>.
+                  </>
+                )}
+              </span>
+            </div>
+
+            <span className="text-[11px] font-bold text-brand-700 bg-white px-2.5 py-0.5 rounded-full border border-brand-200 shrink-0">
+              ⚡ Tự động tính toán
+            </span>
+          </div>
+        )}
 
         {/* Search inside emulation table */}
         <SearchBar
@@ -383,7 +622,7 @@ export default function EmulationPage() {
       </div>
 
       {/* Biểu Đồ Thống Kê & Bục Vinh Danh */}
-      <EmulationChart emulations={emulations} periodValue={selectedPeriodValue} />
+      <EmulationChart emulations={filteredEmulations} periodValue={selectedPeriodValue} />
 
       {/* Emulation Table */}
       {loading ? (
@@ -391,9 +630,13 @@ export default function EmulationPage() {
       ) : filteredEmulations.length === 0 ? (
         <EmptyState
           title="Chưa có kết quả thi đua"
-          description={`Chưa có dữ liệu chấm điểm cho ${selectedPeriodValue}.`}
-          actionText={canManage ? 'Chấm điểm cho giáo viên' : undefined}
-          onAction={canManage ? handleOpenAddModal : undefined}
+          description={
+            selectedPeriodType === 'month'
+              ? `Chưa có dữ liệu chấm điểm cho ${selectedPeriodValue}.`
+              : `Chưa có dữ liệu điểm các tháng thành phần để tính TBC cho ${selectedPeriodValue}. Quý thầy cô vui lòng chấm điểm các tháng trước.`
+          }
+          actionText={isAdmin && selectedPeriodType === 'month' ? 'Chấm điểm cho giáo viên' : undefined}
+          onAction={isAdmin && selectedPeriodType === 'month' ? handleOpenAddModal : undefined}
           icon={Award}
         />
       ) : (
@@ -404,12 +647,17 @@ export default function EmulationPage() {
                 <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-600 uppercase text-[11px] font-bold tracking-wider">
                   <th className="py-3.5 px-4">Thứ Hạng</th>
                   <th className="py-3.5 px-4">Họ và Tên Giáo Viên</th>
-                  <th className="py-3.5 px-4 text-center">Hồ Sơ Chuyên Môn (40%)</th>
-                  <th className="py-3.5 px-4 text-center">Thao Giảng / Dự Giờ (40%)</th>
-                  <th className="py-3.5 px-4 text-center">Phong Trào / Khác (20%)</th>
-                  <th className="py-3.5 px-4 text-center">Tổng Điểm</th>
+                  <th className="py-3.5 px-4 text-center">Hồ Sơ (40%)</th>
+                  <th className="py-3.5 px-4 text-center">Thao Giảng (40%)</th>
+                  <th className="py-3.5 px-4 text-center">Phong Trào (20%)</th>
+                  <th className="py-3.5 px-4 text-center">
+                    {selectedPeriodType === 'month' ? 'Tổng Điểm' : 'Điểm TBC'}
+                  </th>
                   <th className="py-3.5 px-4 text-center">Xếp Loại</th>
-                  {canManage && <th className="py-3.5 px-4 text-right">Thao Tác</th>}
+                  <th className="py-3.5 px-4">Ghi Chú & Chi Tiết Tính</th>
+                  {isAdmin && selectedPeriodType === 'month' && (
+                    <th className="py-3.5 px-4 text-right">Thao Tác</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -437,7 +685,7 @@ export default function EmulationPage() {
                         {item.profiles?.full_name || 'Giáo viên'}
                       </div>
                       <div className="text-[11px] text-slate-400">
-                        {item.profiles?.specialty}
+                        {item.profiles?.specialty || 'Tổ KHTN'}
                       </div>
                     </td>
                     <td className="py-4 px-4 text-center font-semibold text-slate-700">
@@ -459,18 +707,29 @@ export default function EmulationPage() {
                         {item.rank}
                       </span>
                     </td>
-                    {canManage && (
+                    <td className="py-4 px-4 text-slate-600 text-[11px]">
+                      {item.is_aggregated ? (
+                        <span className="inline-flex items-center space-x-1 text-brand-700 font-medium bg-brand-50 px-2 py-0.5 rounded-md border border-brand-200/60">
+                          <span>{item.notes}</span>
+                        </span>
+                      ) : (
+                        item.notes || '---'
+                      )}
+                    </td>
+                    {isAdmin && selectedPeriodType === 'month' && (
                       <td className="py-4 px-4 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end space-x-1.5">
                           <button
                             onClick={() => handleOpenEditModal(item)}
                             className="p-1.5 text-slate-600 hover:text-brand-600 hover:bg-brand-50 rounded-lg border border-slate-200 transition-colors"
+                            title="Sửa điểm thi đua tháng"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => setDeletingItem(item)}
                             className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg border border-rose-200 transition-colors"
+                            title="Xóa bản ghi thi đua tháng"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -485,7 +744,7 @@ export default function EmulationPage() {
         </div>
       )}
 
-      {/* Modal Chấm Điểm Thi Đua */}
+      {/* Modal Chấm Điểm Thi Đua Theo Tháng (Chỉ Admin mới mở được) */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -500,12 +759,12 @@ export default function EmulationPage() {
               value={formData.teacher_id}
               disabled={!!editingItem}
               onChange={(e) => setFormData({ ...formData, teacher_id: e.target.value })}
-              className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+              className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium"
               required
             >
               {teachers.map((t) => (
                 <option key={t.id} value={t.id}>
-                  {t.full_name} ({t.specialty})
+                  {t.full_name} ({t.specialty || 'Tổ KHTN'})
                 </option>
               ))}
             </select>
@@ -513,13 +772,18 @@ export default function EmulationPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Kỳ Đánh Giá</label>
-              <input
-                type="text"
-                disabled
-                value={`${selectedPeriodType === 'month' ? 'Tháng' : selectedPeriodType === 'term' ? 'Học kỳ' : 'Cả năm'}: ${selectedPeriodValue}`}
-                className="w-full px-3.5 py-2 bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700"
-              />
+              <label className="block text-xs font-bold text-slate-700 mb-1">Tháng Đánh Giá</label>
+              <select
+                value={formData.period_value}
+                onChange={(e) => setFormData({ ...formData, period_value: e.target.value })}
+                className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+              >
+                {[9, 10, 11, 12, 1, 2, 3, 4, 5].map((m) => (
+                  <option key={m} value={`Tháng ${m}`}>
+                    Tháng {m} {m >= 9 || m === 1 ? '(Học kỳ I)' : '(Học kỳ II)'}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -615,7 +879,7 @@ export default function EmulationPage() {
         </form>
       </Modal>
 
-      {/* In Bảng Thi Đua Chuẩn Quốc Gia */}
+      {/* In Bảng Thi Đua Chuẩn */}
       <PrintReportModal
         isOpen={isPrintOpen}
         onClose={() => setIsPrintOpen(false)}
@@ -632,7 +896,7 @@ export default function EmulationPage() {
         onClose={() => setDeletingItem(null)}
         onConfirm={handleDeleteEmulation}
         title="Xóa đánh giá thi đua"
-        message={`Bạn có chắc chắn muốn xóa bản ghi thi đua của "${deletingItem?.profiles?.full_name}" không?`}
+        message={`Bạn có chắc chắn muốn xóa bản ghi thi đua tháng của "${deletingItem?.profiles?.full_name}" không?`}
         isLoading={saving}
       />
     </div>

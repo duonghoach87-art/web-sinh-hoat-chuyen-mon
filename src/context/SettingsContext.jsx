@@ -1,27 +1,42 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { getMonthlyPedagogicalTheme } from '../utils/monthlyQuotes';
 
 const SettingsContext = createContext(null);
 
+const defaultTheme = getMonthlyPedagogicalTheme();
+
 const DEFAULT_SETTINGS = {
   department_authority: 'PHÒNG GIÁO DỤC VÀ ĐÀO TẠO',
-  school_name: 'TRƯỜNG THCS CHU VĂN AN',
+  school_name: 'TRƯỜNG PTDTBT TH&THCS SÌ LỞ LẦU',
   department_name: 'TỔ KHOA HỌC TỰ NHIÊN',
   school_year: '2026-2027',
   active_term: 'Học kỳ 1',
-  principal_name: 'Thầy Nguyễn Văn Quản (Hiệu trưởng)',
-  head_teacher_name: 'Thầy Dương Văn Hoạch (Tổ trưởng KHTN)',
-  deputy_head_name: 'Cô Nguyễn Thị Hảo (Tổ phó KHTN)',
-  address: 'Số 123 Đường Giáo Dục, Quận/Huyện...',
-  phone_number: '024.3838.xxxx',
+  principal_name: 'Ban Giám Hiệu',
+  head_teacher_name: 'Dương Văn Hoạch (Tổ trưởng KHTN)',
+  deputy_head_name: 'Nguyễn Thị Hảo (Tổ phó KHTN)',
+  address: 'Bản Gia Khâu - xã Sì Lở Lầu - tỉnh Lai Châu',
+  phone_number: '0345081076',
   logo_url: null,
   head_signature_url: null,
   principal_signature_url: null,
-  motto: 'Đoàn kết - Sáng tạo - Đổi mới phương pháp dạy học'
+  motto: defaultTheme.motto || 'Đoàn kết - Sáng tạo - Đổi mới phương pháp dạy học',
+  monthly_theme_badge: defaultTheme.badge || 'Tháng 8 • Tập Huấn Chuyên Môn Đầu Năm',
+  monthly_focus: defaultTheme.highlight || 'Hoàn thiện phân công chuyên môn và kế hoạch hoạt động của Tổ Khoa học Tự nhiên.'
 };
 
 export function SettingsProvider({ children }) {
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState(() => {
+    try {
+      const cached = localStorage.getItem('khtn_school_settings');
+      if (cached) {
+        return { ...DEFAULT_SETTINGS, ...JSON.parse(cached) };
+      }
+    } catch (e) {
+      console.warn('Lỗi đọc settings từ localStorage:', e);
+    }
+    return DEFAULT_SETTINGS;
+  });
   const [loading, setLoading] = useState(true);
 
   const fetchSettings = async () => {
@@ -40,10 +55,13 @@ export function SettingsProvider({ children }) {
       if (error) {
         console.warn('Chưa tải được cấu hình trường từ DB:', error.message);
       } else if (data) {
-        setSettings((prev) => ({
-          ...prev,
-          ...data
-        }));
+        setSettings((prev) => {
+          const merged = { ...prev, ...data };
+          try {
+            localStorage.setItem('khtn_school_settings', JSON.stringify(merged));
+          } catch (e) {}
+          return merged;
+        });
       }
     } catch (err) {
       console.error('Lỗi nạp cài đặt trường:', err);
@@ -58,34 +76,40 @@ export function SettingsProvider({ children }) {
 
   const updateSettings = async (newSettings) => {
     try {
-      const payload = {
+      const merged = {
+        ...settings,
         ...newSettings,
         updated_at: new Date().toISOString()
       };
 
+      // Lưu ngay vào localStorage
+      try {
+        localStorage.setItem('khtn_school_settings', JSON.stringify(merged));
+      } catch (e) {}
+      setSettings(merged);
+
       if (settings?.id) {
         let { data, error } = await supabase
           .from('school_settings')
-          .update(payload)
+          .update(merged)
           .eq('id', settings.id)
           .select()
           .single();
 
-        // Nếu DB chưa có cột mới, tự động loại bỏ cột mở rộng và lưu các trường cơ bản
         if (error && error.message?.includes('column')) {
           console.warn('DB chưa có đủ cột mở rộng, đang lưu các trường cơ bản...');
           const fallbackPayload = {
-            department_authority: newSettings.department_authority,
-            school_name: newSettings.school_name,
-            department_name: newSettings.department_name,
-            school_year: newSettings.school_year,
-            active_term: newSettings.active_term,
-            principal_name: newSettings.principal_name,
-            head_teacher_name: newSettings.head_teacher_name,
-            address: newSettings.address,
-            phone_number: newSettings.phone_number,
-            motto: newSettings.motto,
-            logo_url: newSettings.logo_url,
+            department_authority: merged.department_authority,
+            school_name: merged.school_name,
+            department_name: merged.department_name,
+            school_year: merged.school_year,
+            active_term: merged.active_term,
+            principal_name: merged.principal_name,
+            head_teacher_name: merged.head_teacher_name,
+            address: merged.address,
+            phone_number: merged.phone_number,
+            motto: merged.motto,
+            logo_url: merged.logo_url,
             updated_at: new Date().toISOString()
           };
 
@@ -99,36 +123,36 @@ export function SettingsProvider({ children }) {
           if (fallbackRes.error) throw fallbackRes.error;
           data = {
             ...fallbackRes.data,
-            deputy_head_name: newSettings.deputy_head_name,
-            head_signature_url: newSettings.head_signature_url,
-            principal_signature_url: newSettings.principal_signature_url
+            ...merged
           };
         } else if (error) {
           throw error;
         }
 
-        setSettings(data);
-        return data;
+        if (data) {
+          setSettings((prev) => ({ ...prev, ...data }));
+        }
+        return data || merged;
       } else {
         let { data, error } = await supabase
           .from('school_settings')
-          .insert([payload])
+          .insert([merged])
           .select()
           .single();
 
         if (error && error.message?.includes('column')) {
           const fallbackPayload = {
-            department_authority: newSettings.department_authority,
-            school_name: newSettings.school_name,
-            department_name: newSettings.department_name,
-            school_year: newSettings.school_year,
-            active_term: newSettings.active_term,
-            principal_name: newSettings.principal_name,
-            head_teacher_name: newSettings.head_teacher_name,
-            address: newSettings.address,
-            phone_number: newSettings.phone_number,
-            motto: newSettings.motto,
-            logo_url: newSettings.logo_url
+            department_authority: merged.department_authority,
+            school_name: merged.school_name,
+            department_name: merged.department_name,
+            school_year: merged.school_year,
+            active_term: merged.active_term,
+            principal_name: merged.principal_name,
+            head_teacher_name: merged.head_teacher_name,
+            address: merged.address,
+            phone_number: merged.phone_number,
+            motto: merged.motto,
+            logo_url: merged.logo_url
           };
 
           const fallbackRes = await supabase
@@ -140,16 +164,16 @@ export function SettingsProvider({ children }) {
           if (fallbackRes.error) throw fallbackRes.error;
           data = {
             ...fallbackRes.data,
-            deputy_head_name: newSettings.deputy_head_name,
-            head_signature_url: newSettings.head_signature_url,
-            principal_signature_url: newSettings.principal_signature_url
+            ...merged
           };
         } else if (error) {
           throw error;
         }
 
-        setSettings(data);
-        return data;
+        if (data) {
+          setSettings((prev) => ({ ...prev, ...data }));
+        }
+        return data || merged;
       }
     } catch (err) {
       console.error('Lỗi cập nhật cấu hình trường:', err);

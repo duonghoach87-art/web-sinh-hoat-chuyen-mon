@@ -30,7 +30,7 @@ export default function Footer() {
         </div>
 
         <div className="flex items-center space-x-4 text-slate-400 text-[11px]">
-          <span>Thông tư 32/2020/TT-BGDĐT</span>
+          <span>Thông tư 15/2026/TT-BGDĐT</span>
           <span>&bull;</span>
           <div className="flex items-center space-x-1 text-emerald-600 font-medium">
             <ShieldCheck className="w-3.5 h-3.5" />

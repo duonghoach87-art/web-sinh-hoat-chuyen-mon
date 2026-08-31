@@ -9,11 +9,26 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-// Khởi tạo Supabase Client
+// Khởi tạo Supabase Client chính của ứng dụng
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',
   supabaseAnonKey || 'placeholder-key'
 );
+
+// Khởi tạo Client cô lập không lưu phiên đăng nhập (Dùng khi Admin tạo tài khoản cho giáo viên mới mà không bị cướp phiên Admin)
+export const createIsolatedClient = () => {
+  return createClient(
+    supabaseUrl || 'https://placeholder.supabase.co',
+    supabaseAnonKey || 'placeholder-key',
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false
+      }
+    }
+  );
+};
 
 export const isSupabaseConfigured = () => {
   return (

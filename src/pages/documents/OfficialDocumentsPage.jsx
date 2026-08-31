@@ -21,11 +21,16 @@ import {
   Building,
   Hash,
   Upload,
-  FileCheck
+  FileCheck,
+  ExternalLink,
+  ShieldAlert,
+  Info
 } from 'lucide-react';
 
 export default function OfficialDocumentsPage() {
-  const { canManage, user } = useAuth();
+  const { canManage, role, user } = useAuth();
+  const isAdmin = role === 'admin';
+
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -34,6 +39,7 @@ export default function OfficialDocumentsPage() {
   // Preview & Delete State
   const [previewUrl, setPreviewUrl] = useState(null);
   const [previewTitle, setPreviewTitle] = useState('');
+  const [viewingDoc, setViewingDoc] = useState(null); // Modal xem chi tiết văn bản
   const [deletingDoc, setDeletingDoc] = useState(null);
 
   // Form State
@@ -54,7 +60,7 @@ export default function OfficialDocumentsPage() {
       setLoading(true);
       const { data, error } = await supabase
         .from('official_documents')
-        .select('*, profiles(full_name)')
+        .select('*')
         .order('issue_date', { ascending: false });
 
       if (error) throw error;
@@ -100,8 +106,8 @@ export default function OfficialDocumentsPage() {
           'van-ban'
         );
         fileUrl = uploadRes.publicUrl;
-        fileName = uploadRes.fileName;
-        fileSize = uploadRes.fileSize;
+        fileName = selectedFile.name;
+        fileSize = selectedFile.size;
       }
 
       const { error } = await supabase.from('official_documents').insert([
@@ -111,9 +117,10 @@ export default function OfficialDocumentsPage() {
           category: formData.category,
           issuing_authority: formData.issuing_authority,
           issue_date: formData.issue_date,
-          description: formData.description,
+          description: formData.description.trim(),
           file_url: fileUrl,
           file_name: fileName,
+          file_size: fileSize,
           uploaded_by: user?.id
         }
       ]);
@@ -124,7 +131,7 @@ export default function OfficialDocumentsPage() {
       await fetchDocuments();
     } catch (err) {
       console.error('Lỗi khi lưu văn bản:', err);
-      alert(`Lỗi: ${err.message}`);
+      alert(`Không thể lưu văn bản: ${err.message}`);
     } finally {
       setSaving(false);
     }
@@ -132,6 +139,11 @@ export default function OfficialDocumentsPage() {
 
   const handleDeleteDocument = async () => {
     if (!deletingDoc) return;
+    if (!isAdmin) {
+      alert('Chỉ Quản trị viên (Admin - Thầy Hoạch) mới có quyền xóa văn bản này.');
+      return;
+    }
+
     try {
       setSaving(true);
       const { error } = await supabase
@@ -140,6 +152,7 @@ export default function OfficialDocumentsPage() {
         .eq('id', deletingDoc.id);
 
       if (error) throw error;
+
       setDeletingDoc(null);
       await fetchDocuments();
     } catch (err) {
@@ -150,11 +163,26 @@ export default function OfficialDocumentsPage() {
     }
   };
 
+  const handleOpenDocViewer = (doc) => {
+    if (doc.file_url) {
+      setPreviewUrl(doc.file_url);
+      setPreviewTitle(`${doc.document_number ? doc.document_number + ' - ' : ''}${doc.title}`);
+    } else {
+      setViewingDoc(doc);
+    }
+  };
+
   const filteredDocs = documents.filter((doc) => {
+    const term = (searchTerm || '').toLowerCase().trim();
+    const title = (doc.title || '').toLowerCase();
+    const number = (doc.document_number || '').toLowerCase();
+    const authority = (doc.issuing_authority || '').toLowerCase();
+
     const matchesSearch =
-      doc.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      doc.document_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      doc.issuing_authority?.toLowerCase().includes(searchTerm.toLowerCase());
+      !term ||
+      title.includes(term) ||
+      number.includes(term) ||
+      authority.includes(term);
 
     const matchesCategory =
       selectedCategory === 'ALL' || doc.category === selectedCategory;
@@ -164,12 +192,14 @@ export default function OfficialDocumentsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header Page */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
         <div>
           <div className="flex items-center space-x-2 text-brand-600 mb-1">
             <FileText className="w-5 h-5" />
-            <span className="text-xs font-bold uppercase tracking-wider">Hành Chính & Chỉ Đạo</span>
+            <span className="text-xs font-bold uppercase tracking-wider">
+              Hành Chính & Chỉ Đạo
+            </span>
           </div>
           <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight">
             Văn Bản Cấp Trên & Chỉ Thị Ngành
@@ -190,19 +220,19 @@ export default function OfficialDocumentsPage() {
         )}
       </div>
 
-      {/* Filter & Search */}
-      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+      {/* Filter & Search Bar */}
+      <div className="flex flex-col md:flex-row gap-3 items-center justify-between">
         <SearchBar
           value={searchTerm}
           onChange={setSearchTerm}
           placeholder="Tìm theo tên văn bản, số hiệu hoặc cơ quan ban hành..."
-          className="w-full sm:max-w-md"
+          className="w-full md:max-w-md"
         />
 
-        <div className="flex items-center space-x-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+        <div className="flex items-center space-x-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
           <button
             onClick={() => setSelectedCategory('ALL')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all ${
               selectedCategory === 'ALL'
                 ? 'bg-slate-800 text-white shadow-xs'
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -212,12 +242,12 @@ export default function OfficialDocumentsPage() {
           </button>
           {DOCUMENT_CATEGORIES.map((cat) => {
             const count = documents.filter((d) => d.category === cat).length;
-            if (count === 0 && selectedCategory !== cat) return null;
+            if (count === 0) return null;
             return (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all ${
                   selectedCategory === cat
                     ? 'bg-brand-600 text-white shadow-xs'
                     : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -230,13 +260,13 @@ export default function OfficialDocumentsPage() {
         </div>
       </div>
 
-      {/* Document Table / List */}
+      {/* Table Danh Sách Văn Bản */}
       {loading ? (
         <LoadingSpinner text="Đang tải danh mục văn bản..." />
       ) : filteredDocs.length === 0 ? (
         <EmptyState
-          title="Không tìm thấy văn bản"
-          description="Chưa có văn bản nào phù hợp với bộ lọc hoặc từ khóa tìm kiếm."
+          title="Không tìm thấy văn bản nào"
+          description="Chưa có văn bản phù hợp với từ khóa tìm kiếm hoặc danh mục đã chọn."
           actionText={canManage ? 'Thêm văn bản mới' : undefined}
           onAction={canManage ? handleOpenAddModal : undefined}
           icon={FileText}
@@ -246,7 +276,7 @@ export default function OfficialDocumentsPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-600 uppercase text-[11px] font-bold tracking-wider">
+                <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
                   <th className="py-3.5 px-4">Số Hiệu / Trích Yếu</th>
                   <th className="py-3.5 px-4">Loại Văn Bản</th>
                   <th className="py-3.5 px-4">Cơ Quan Ban Hành</th>
@@ -256,7 +286,11 @@ export default function OfficialDocumentsPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredDocs.map((doc) => (
-                  <tr key={doc.id} className="hover:bg-slate-50/60 transition-colors">
+                  <tr
+                    key={doc.id}
+                    className="hover:bg-slate-50/60 transition-colors cursor-pointer"
+                    onClick={() => handleOpenDocViewer(doc)}
+                  >
                     <td className="py-4 px-4 max-w-md">
                       <div className="space-y-1">
                         {doc.document_number && (
@@ -265,11 +299,13 @@ export default function OfficialDocumentsPage() {
                             <span>{doc.document_number}</span>
                           </div>
                         )}
-                        <h4 className="font-bold text-slate-800 text-sm leading-snug line-clamp-2">
+                        <h4 className="font-bold text-slate-800 text-sm leading-snug line-clamp-2 hover:text-brand-600 transition-colors">
                           {doc.title}
                         </h4>
                         {doc.description && (
-                          <p className="text-[11px] text-slate-500 line-clamp-1">{doc.description}</p>
+                          <p className="text-[11px] text-slate-500 line-clamp-1">
+                            {doc.description}
+                          </p>
                         )}
                       </div>
                     </td>
@@ -288,41 +324,42 @@ export default function OfficialDocumentsPage() {
                         <span>{formatDate(doc.issue_date)}</span>
                       </div>
                     </td>
-                    <td className="py-4 px-4 text-right whitespace-nowrap">
+                    <td
+                      className="py-4 px-4 text-right whitespace-nowrap"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <div className="flex items-center justify-end space-x-2">
-                        {doc.file_url ? (
-                          <>
-                            <button
-                              onClick={() => {
-                                setPreviewUrl(doc.file_url);
-                                setPreviewTitle(doc.title);
-                              }}
-                              className="p-1.5 text-brand-600 hover:bg-brand-50 rounded-lg border border-brand-200 transition-colors flex items-center space-x-1 text-xs font-semibold px-2.5"
-                              title="Xem trực tiếp"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>Xem</span>
-                            </button>
-                            <a
-                              href={doc.file_url}
-                              download
-                              target="_blank"
-                              rel="noreferrer"
-                              className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors"
-                              title="Tải về máy"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                            </a>
-                          </>
-                        ) : (
-                          <span className="text-[11px] text-slate-400 italic">Không có file đính kèm</span>
+                        {/* NÚT CON MẮT XEM TÀI LIỆU (LUÔN HIỂN THỊ CHO TẤT CẢ GIÁO VIÊN) */}
+                        <button
+                          onClick={() => handleOpenDocViewer(doc)}
+                          className="p-1.5 text-brand-600 hover:text-white bg-brand-50 hover:bg-brand-600 rounded-lg border border-brand-200 hover:border-brand-600 transition-all flex items-center space-x-1.5 text-xs font-bold px-3 shadow-2xs"
+                          title="Xem chi tiết và tài liệu văn bản"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Xem</span>
+                        </button>
+
+                        {/* Nút Tải về máy nếu có file đính kèm */}
+                        {doc.file_url && (
+                          <a
+                            href={doc.file_url}
+                            download
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded-lg border border-emerald-200 transition-colors flex items-center space-x-1 px-2.5 font-semibold text-xs"
+                            title="Tải tệp văn bản về máy"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Tải về</span>
+                          </a>
                         )}
 
-                        {canManage && (
+                        {/* NÚT XÓA - DÀNH RIÊNG CHO QUẢN TRỊ VIÊN (ADMIN - THẦY HOẠCH), GIÁO VIÊN KHÔNG ĐƯỢC XÓA */}
+                        {isAdmin && (
                           <button
                             onClick={() => setDeletingDoc(doc)}
-                            className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg border border-rose-200 transition-colors"
-                            title="Xóa văn bản"
+                            className="p-1.5 text-rose-500 hover:text-white hover:bg-rose-600 rounded-lg border border-rose-200 hover:border-rose-600 transition-colors shadow-2xs"
+                            title="Xóa văn bản (Quyền Admin)"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -337,7 +374,7 @@ export default function OfficialDocumentsPage() {
         </div>
       )}
 
-      {/* Modal Thêm Văn Bản */}
+      {/* Modal Thêm Văn Bản Mới */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -352,8 +389,8 @@ export default function OfficialDocumentsPage() {
               rows={2}
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              placeholder="VD: Quyết định ban hành kế hoạch thời gian năm học 2025-2026..."
-              className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+              placeholder="VD: Quyết định ban hành kế hoạch thời gian năm học 2026-2027..."
+              className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium"
               required
             />
           </div>
@@ -414,10 +451,10 @@ export default function OfficialDocumentsPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Tệp Đính Kèm (PDF / Word)</label>
+            <label className="block text-xs font-bold text-slate-700 mb-1">Tệp Đính Kèm (PDF / Word / Ảnh)</label>
             <input
               type="file"
-              accept=".pdf,.doc,.docx"
+              accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
               onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
               className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100"
             />
@@ -453,7 +490,68 @@ export default function OfficialDocumentsPage() {
         </form>
       </Modal>
 
-      {/* PDF Viewer Modal */}
+      {/* Modal Xem Chi Tiết Văn Bản (Khi chưa có file đính kèm hoặc xem tóm tắt) */}
+      {viewingDoc && (
+        <Modal
+          isOpen={!!viewingDoc}
+          onClose={() => setViewingDoc(null)}
+          title="Chi Tiết Văn Bản Chỉ Đạo"
+        >
+          <div className="space-y-4 text-xs">
+            <div className="p-4 bg-brand-50/70 border border-brand-200 rounded-2xl space-y-2">
+              {viewingDoc.document_number && (
+                <div className="inline-flex items-center space-x-1 font-mono font-bold text-brand-800 bg-white px-2.5 py-0.5 rounded-md border border-brand-200">
+                  <Hash className="w-3.5 h-3.5" />
+                  <span>Số: {viewingDoc.document_number}</span>
+                </div>
+              )}
+              <h3 className="text-base font-extrabold text-slate-900 leading-snug">
+                {viewingDoc.title}
+              </h3>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Loại Văn Bản</span>
+                <span className="font-bold text-slate-800">{viewingDoc.category}</span>
+              </div>
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Cơ Quan Ban Hành</span>
+                <span className="font-bold text-slate-800">{viewingDoc.issuing_authority}</span>
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+              <span className="text-[10px] font-bold text-slate-400 uppercase block">Ngày Ban Hành</span>
+              <span className="font-bold text-brand-700">{formatDate(viewingDoc.issue_date)}</span>
+            </div>
+
+            {viewingDoc.description ? (
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Nội Dung Tóm Tắt / Ghi Chú</span>
+                <p className="text-slate-700 leading-relaxed">{viewingDoc.description}</p>
+              </div>
+            ) : null}
+
+            <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl flex items-center space-x-2 text-amber-800">
+              <Info className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Văn bản này hiện chưa đính kèm tệp số hóa (.pdf / .docx). Quý thầy cô xem thông tin trích yếu ở trên.</span>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setViewingDoc(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal Xem Trực Tiếp Tệp PDF / Ảnh */}
       <PdfViewerModal
         isOpen={!!previewUrl}
         onClose={() => setPreviewUrl(null)}
@@ -461,14 +559,15 @@ export default function OfficialDocumentsPage() {
         title={previewTitle}
       />
 
-      {/* Confirm Delete Modal */}
+      {/* Modal Xác Nhận Xóa Văn Bản (Chỉ dành cho Admin) */}
       <ConfirmModal
         isOpen={!!deletingDoc}
         onClose={() => setDeletingDoc(null)}
         onConfirm={handleDeleteDocument}
-        title="Xóa văn bản"
-        message={`Bạn có chắc chắn muốn xóa văn bản "${deletingDoc?.title}" không?`}
+        title="Xóa Văn Bản Cấp Trên"
+        message={`Bạn có chắc chắn muốn xóa văn bản "${deletingDoc?.title}" khỏi hệ thống không? Hành động này dành riêng cho Quản trị viên (Admin - Thầy Hoạch).`}
         isLoading={saving}
+        type="danger"
       />
     </div>
   );
