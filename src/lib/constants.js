@@ -78,9 +78,14 @@ export const MEETING_TYPES = {
 };
 
 export const EXAM_TYPES = {
-  regular: { label: 'Kiểm tra thường xuyên' },
-  mid_term: { label: 'Kiểm tra giữa kỳ' },
-  final_term: { label: 'Kiểm tra cuối kỳ' }
+  regular: { label: 'Thường xuyên', badge: 'bg-slate-100 text-slate-800 border-slate-200' },
+  mid_term_1: { label: 'Giữa kì I', badge: 'bg-blue-100 text-blue-800 border-blue-200' },
+  final_term_1: { label: 'Học kì I', badge: 'bg-indigo-100 text-indigo-800 border-indigo-200' },
+  mid_term_2: { label: 'Giữa kì II', badge: 'bg-amber-100 text-amber-800 border-amber-200' },
+  final_term_2: { label: 'Học kì II', badge: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+  // Tương thích ngược
+  mid_term: { label: 'Giữa kì I', badge: 'bg-blue-100 text-blue-800 border-blue-200' },
+  final_term: { label: 'Học kì I', badge: 'bg-indigo-100 text-indigo-800 border-indigo-200' }
 };
 
 export const TEACHING_REG_TYPES = {

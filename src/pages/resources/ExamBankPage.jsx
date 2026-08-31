@@ -48,7 +48,7 @@ export default function ExamBankPage() {
     title: '',
     grade_level: 6,
     subject: 'Khoa học Tự nhiên',
-    exam_type: 'mid_term',
+    exam_type: 'mid_term_1',
     school_year: '2026-2027'
   });
 
@@ -78,8 +78,8 @@ export default function ExamBankPage() {
       title: '',
       grade_level: 6,
       subject: 'Khoa học Tự nhiên',
-      exam_type: 'mid_term',
-      school_year: '2025-2026'
+      exam_type: 'mid_term_1',
+      school_year: '2026-2027'
     });
     setExamFile(null);
     setMatrixFile(null);
@@ -217,10 +217,12 @@ export default function ExamBankPage() {
             onChange={(e) => setSelectedType(e.target.value)}
             className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
           >
-            <option value="ALL">Tất cả Kỳ kiểm tra</option>
+            <option value="ALL">Tất cả Loại đề kiểm tra</option>
             <option value="regular">Thường xuyên</option>
-            <option value="mid_term">Giữa kỳ</option>
-            <option value="final_term">Cuối kỳ</option>
+            <option value="mid_term_1">Giữa kì I</option>
+            <option value="final_term_1">Học kì I</option>
+            <option value="mid_term_2">Giữa kì II</option>
+            <option value="final_term_2">Học kì II</option>
           </select>
         </div>
       </div>
@@ -240,18 +242,25 @@ export default function ExamBankPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredExams.map((exam) => {
             const isOwner = exam.author_id === user?.id;
+            const examTypeInfo = EXAM_TYPES[exam.exam_type] || {
+              label: exam.exam_type || 'Thường xuyên',
+              badge: 'bg-slate-100 text-slate-700 border-slate-200'
+            };
+
             return (
               <div
                 key={exam.id}
                 className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
               >
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-md bg-brand-50 text-brand-700 border border-brand-100">
                       Khối {exam.grade_level} • {exam.subject}
                     </span>
-                    <span className="text-[11px] text-slate-400 font-medium">
-                      Năm: {exam.school_year}
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${examTypeInfo.badge}`}
+                    >
+                      {examTypeInfo.label}
                     </span>
                   </div>
 
@@ -396,15 +405,17 @@ export default function ExamBankPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Loại Kiểm Tra</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Loại Đề Kiểm Tra</label>
               <select
                 value={formData.exam_type}
                 onChange={(e) => setFormData({ ...formData, exam_type: e.target.value })}
-                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
               >
                 <option value="regular">Thường xuyên</option>
-                <option value="mid_term">Giữa kỳ</option>
-                <option value="final_term">Cuối kỳ</option>
+                <option value="mid_term_1">Giữa kì I</option>
+                <option value="final_term_1">Học kì I</option>
+                <option value="mid_term_2">Giữa kì II</option>
+                <option value="final_term_2">Học kì II</option>
               </select>
             </div>
           </div>
