@@ -18,7 +18,8 @@ import {
   Sparkles,
   FlaskConical,
   Dna,
-  Zap
+  Zap,
+  Calculator
 } from 'lucide-react';
 
 export default function VirtualLabsPage() {
@@ -84,18 +85,34 @@ export default function VirtualLabsPage() {
 
     try {
       setSaving(true);
-      const { error } = await supabase.from('virtual_labs').insert([
-        {
-          title: formData.title.trim(),
-          description: formData.description.trim(),
-          subject: formData.subject,
-          grade_level: parseInt(formData.grade_level) || null,
-          link_url: formData.link_url.trim(),
-          iframe_code: formData.iframe_code.trim() || null
-        }
-      ]);
+      const newRecord = {
+        title: formData.title.trim(),
+        description: formData.description.trim(),
+        subject: formData.subject,
+        grade_level: parseInt(formData.grade_level) || null,
+        link_url: formData.link_url.trim(),
+        iframe_code: formData.iframe_code.trim() || null
+      };
 
-      if (error) throw error;
+      let { error } = await supabase.from('virtual_labs').insert([newRecord]);
+
+      // Dự phòng nếu Supabase chưa mở constraint check cho môn toán ('math')
+      if (
+        error &&
+        (error.message?.includes('virtual_labs_subject_check') ||
+          error.code === '23514')
+      ) {
+        const fallbackRecord = {
+          ...newRecord,
+          subject: 'general',
+          description: `[Môn Toán] ${newRecord.description}`.trim()
+        };
+        const retry = await supabase.from('virtual_labs').insert([fallbackRecord]);
+        if (retry.error) throw retry.error;
+        error = null;
+      } else if (error) {
+        throw error;
+      }
 
       setIsModalOpen(false);
       await fetchLabs();
@@ -140,6 +157,8 @@ export default function VirtualLabsPage() {
 
   const getSubjectMeta = (subj) => {
     switch (subj) {
+      case 'math':
+        return { label: 'Toán Học', icon: Calculator, color: 'bg-rose-50 text-rose-700 border-rose-200' };
       case 'physics':
         return { label: 'Vật Lý', icon: Zap, color: 'bg-blue-50 text-blue-700 border-blue-200' };
       case 'chemistry':
@@ -197,7 +216,17 @@ export default function VirtualLabsPage() {
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
             }`}
           >
-            Tất cả ({labs.length})
+            Tất cả Môn ({labs.length})
+          </button>
+          <button
+            onClick={() => setSelectedSubject('math')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all ${
+              selectedSubject === 'math'
+                ? 'bg-rose-600 text-white shadow-xs'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            Toán học
           </button>
           <button
             onClick={() => setSelectedSubject('physics')}
@@ -386,12 +415,13 @@ export default function VirtualLabsPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Phân Môn</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Môn</label>
               <select
                 value={formData.subject}
                 onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
                 className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
               >
+                <option value="math">Toán học</option>
                 <option value="physics">Vật lý</option>
                 <option value="chemistry">Hóa học</option>
                 <option value="biology">Sinh học</option>
