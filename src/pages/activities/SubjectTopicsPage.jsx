@@ -17,11 +17,13 @@ import {
   PlusCircle,
   ShieldAlert,
   FilePlus,
-  Clock
+  Clock,
+  MessageSquare
 } from 'lucide-react';
 import Badge from '../../components/common/Badge';
-import Modal from '../../components/common/Modal';
 import ConfirmModal from '../../components/common/ConfirmModal';
+import AddTopicModal from '../../components/activities/AddTopicModal';
+import TopicFeedbackModal from '../../components/activities/TopicFeedbackModal';
 
 const INITIAL_TOPICS = [
   {
@@ -34,7 +36,18 @@ const INITIAL_TOPICS = [
     date: '15/10/2025',
     summary: 'Ứng dụng phương pháp dạy học khám phá kết hợp thí nghiệm ảo quan sát dòng mạch gỗ và mạch rây ở thực vật.',
     status: 'Đã hoàn thành',
-    evidence_url: ''
+    file_url: null,
+    file_name: null,
+    feedbacks: [
+      {
+        id: 'fb-1',
+        author_name: 'Cô Nguyễn Thị Hảo',
+        author_specialty: 'Khoa học Tự nhiên',
+        created_at: '15/10/2025 15:30',
+        observation: 'Học sinh rất hào hứng khi được thao tác trên mô phỏng dòng vận chuyển nước qua rễ cây.',
+        suggestion: 'Nên dành thêm 3 phút để đại diện nhóm học sinh yếu lên thuyết trình kết quả.'
+      }
+    ]
   },
   {
     id: 'topic-2',
@@ -46,7 +59,9 @@ const INITIAL_TOPICS = [
     date: '20/11/2025',
     summary: 'Thiết kế hoạt động nhóm đo khối lượng trước và sau phản ứng của dung dịch BaCl2 với Na2SO4.',
     status: 'Đang triển khai',
-    evidence_url: ''
+    file_url: null,
+    file_name: null,
+    feedbacks: []
   },
   {
     id: 'topic-3',
@@ -58,7 +73,9 @@ const INITIAL_TOPICS = [
     date: '05/09/2025',
     summary: 'Xây dựng ngân hàng câu hỏi trắc nghiệm khách quan kết hợp câu hỏi mở thực tiễn gắn với đời sống hàng ngày.',
     status: 'Đã hoàn thành',
-    evidence_url: ''
+    file_url: null,
+    file_name: null,
+    feedbacks: []
   },
   {
     id: 'topic-4',
@@ -70,7 +87,9 @@ const INITIAL_TOPICS = [
     date: '12/12/2025',
     summary: 'Hướng dẫn giáo viên cách nhúng trực tiếp các mô phỏng PhET mạch điện và khúc xạ ánh sáng vào bài giảng điện tử.',
     status: 'Đã hoàn thành',
-    evidence_url: ''
+    file_url: null,
+    file_name: null,
+    feedbacks: []
   }
 ];
 
@@ -90,23 +109,16 @@ export default function SubjectTopicsPage() {
 
   // Modal State Thêm Minh Chứng
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [newTopic, setNewTopic] = useState({
-    title: '',
-    subject: 'Khoa học Tự nhiên 7',
-    grade: 7,
-    author: '',
-    date: new Date().toLocaleDateString('vi-VN'),
-    summary: '',
-    status: 'Đang triển khai',
-    type: 'lesson_study'
-  });
+
+  // Modal State Góp Ý Chuyên Môn
+  const [selectedTopicForFeedback, setSelectedTopicForFeedback] = useState(null);
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
 
   // Modal State Xóa Minh Chứng (Chỉ dành cho Admin)
   const [topicToDelete, setTopicToDelete] = useState(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteSuccess, setDeleteSuccess] = useState(false);
 
-  // Lưu vào localStorage khi topics thay đổi
   useEffect(() => {
     try {
       localStorage.setItem('khtn_subject_topics', JSON.stringify(topics));
@@ -144,34 +156,64 @@ export default function SubjectTopicsPage() {
 
   const filteredTopics = topics.filter((t) => t.type === activeTab);
 
-  const handleOpenAddModal = () => {
-    setNewTopic({
-      title: '',
-      subject: activeTab === 'lesson_study' ? 'Khoa học Tự nhiên 7' : 'Khoa học Tự nhiên',
-      grade: 7,
-      author: '',
-      date: new Date().toLocaleDateString('vi-VN'),
-      summary: '',
-      status: 'Đang triển khai',
-      type: activeTab
-    });
-    setIsAddModalOpen(true);
+  const handleSaveNewTopic = (createdTopic) => {
+    setTopics([createdTopic, ...topics]);
   };
 
-  const handleSaveNewTopic = (e) => {
-    e.preventDefault();
-    if (!newTopic.title.trim() || !newTopic.author.trim()) {
-      alert('Vui lòng điền đầy đủ tên chuyên đề và người thực hiện.');
-      return;
-    }
+  const handleOpenFeedbackModal = (topic) => {
+    setSelectedTopicForFeedback(topic);
+    setIsFeedbackModalOpen(true);
+  };
 
-    const createdTopic = {
-      ...newTopic,
-      id: `topic-${Date.now()}`
-    };
+  const handleAddFeedback = (topicId, feedback) => {
+    setTopics((prev) =>
+      prev.map((t) => {
+        if (t.id === topicId) {
+          const currentFeedbacks = t.feedbacks || [];
+          return {
+            ...t,
+            feedbacks: [feedback, ...currentFeedbacks]
+          };
+        }
+        return t;
+      })
+    );
 
-    setTopics([createdTopic, ...topics]);
-    setIsAddModalOpen(false);
+    // Cập nhật selectedTopic nếu đang mở
+    setSelectedTopicForFeedback((prev) => {
+      if (prev && prev.id === topicId) {
+        return {
+          ...prev,
+          feedbacks: [feedback, ...(prev.feedbacks || [])]
+        };
+      }
+      return prev;
+    });
+  };
+
+  const handleDeleteFeedback = (topicId, feedbackId) => {
+    if (!isAdmin) return;
+    setTopics((prev) =>
+      prev.map((t) => {
+        if (t.id === topicId) {
+          return {
+            ...t,
+            feedbacks: (t.feedbacks || []).filter((fb) => fb.id !== feedbackId)
+          };
+        }
+        return t;
+      })
+    );
+
+    setSelectedTopicForFeedback((prev) => {
+      if (prev && prev.id === topicId) {
+        return {
+          ...prev,
+          feedbacks: (prev.feedbacks || []).filter((fb) => fb.id !== feedbackId)
+        };
+      }
+      return prev;
+    });
   };
 
   const handleOpenDeleteConfirm = (topic) => {
@@ -212,7 +254,7 @@ export default function SubjectTopicsPage() {
 
           {canManage && (
             <button
-              onClick={handleOpenAddModal}
+              onClick={() => setIsAddModalOpen(true)}
               className="inline-flex items-center space-x-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-600/20 transition-all shrink-0 self-start sm:self-auto"
             >
               <FilePlus className="w-4 h-4" />
@@ -340,15 +382,45 @@ export default function SubjectTopicsPage() {
                   </div>
                   <h4 className="text-sm font-bold text-slate-800">{topic.title}</h4>
                   <p className="text-xs text-slate-600 leading-relaxed">{topic.summary}</p>
-                  <div className="text-[11px] text-slate-500 font-medium pt-1">
-                    Người thực hiện: <strong>{topic.author}</strong>
+                  <div className="text-[11px] text-slate-500 font-medium pt-1 flex items-center space-x-3">
+                    <span>Người thực hiện: <strong>{topic.author}</strong></span>
+                    {topic.file_name && (
+                      <span className="text-emerald-700 font-semibold flex items-center space-x-1">
+                        <FileCheck2 className="w-3.5 h-3.5" />
+                        <span>Có tệp giáo án: {topic.file_name}</span>
+                      </span>
+                    )}
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-3 shrink-0 self-end md:self-center">
+                <div className="flex flex-wrap items-center gap-2 shrink-0 self-end md:self-center">
                   <Badge variant={topic.status === 'Đã hoàn thành' ? 'success' : 'warning'}>
                     {topic.status}
                   </Badge>
+
+                  {/* Nút Xem & Thảo Luận Góp Ý Sau Tiết Dạy */}
+                  <button
+                    onClick={() => handleOpenFeedbackModal(topic)}
+                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 rounded-xl text-xs font-bold transition-all border border-brand-200/60 shadow-2xs"
+                    title="Xem thảo luận và đóng góp ý kiến"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>Góp ý ({(topic.feedbacks || []).length})</span>
+                  </button>
+
+                  {/* Nút Tải Giáo Án Đính Kèm Nếu Có */}
+                  {topic.file_url && (
+                    <a
+                      href={topic.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center space-x-1 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold transition-all border border-emerald-200"
+                      title="Tải giáo án / bài giảng minh họa"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Tải giáo án</span>
+                    </a>
+                  )}
 
                   {/* Nút Xóa Minh Chứng - DÀNH RIÊNG CHO QUẢN TRỊ VIÊN (ADMIN - THẦY HOẠCH) */}
                   {isAdmin && (
@@ -367,114 +439,25 @@ export default function SubjectTopicsPage() {
         )}
       </div>
 
-      {/* Modal Thêm Chuyên Đề Mới */}
-      <Modal
+      {/* Modal Thêm Chuyên Đề Mới (Hỗ trợ tải tệp giáo án) */}
+      <AddTopicModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        title="Đăng Ký Hồ Sơ / Minh Chứng Chuyên Đề Mới"
-      >
-        <form onSubmit={handleSaveNewTopic} className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              Tên Chuyên Đề / Bài Học Minh Họa <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={newTopic.title}
-              onChange={(e) => setNewTopic({ ...newTopic, title: e.target.value })}
-              placeholder="VD: Nghiên cứu bài học: Sự nở vì nhiệt của chất rắn"
-              className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500"
-              required
-            />
-          </div>
+        onSave={handleSaveNewTopic}
+        activeTab={activeTab}
+      />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Môn / Phân Môn</label>
-              <select
-                value={newTopic.subject}
-                onChange={(e) => setNewTopic({ ...newTopic, subject: e.target.value })}
-                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-500"
-              >
-                <option value="Khoa học Tự nhiên 6">Khoa học Tự nhiên 6</option>
-                <option value="Khoa học Tự nhiên 7">Khoa học Tự nhiên 7</option>
-                <option value="Khoa học Tự nhiên 8">Khoa học Tự nhiên 8</option>
-                <option value="Khoa học Tự nhiên 9">Khoa học Tự nhiên 9</option>
-                <option value="Khoa học Tự nhiên (Chung)">Khoa học Tự nhiên (Chung)</option>
-                <option value="Toán học">Toán học</option>
-                <option value="Tin học">Tin học</option>
-                <option value="Công nghệ">Công nghệ</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Người / Nhóm Thực Hiện <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={newTopic.author}
-                onChange={(e) => setNewTopic({ ...newTopic, author: e.target.value })}
-                placeholder="VD: Nhóm Vật lý KHTN (Thầy Tuấn & Cô Hảo)"
-                className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-500"
-                required
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Tóm Tắt Nội Dung & Mục Tiêu Đổi Mới</label>
-            <textarea
-              rows={3}
-              value={newTopic.summary}
-              onChange={(e) => setNewTopic({ ...newTopic, summary: e.target.value })}
-              placeholder="Mô tả tóm tắt phương pháp giảng dạy, ứng dụng STEM hoặc thiết bị thí nghiệm..."
-              className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-500"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Thời Gian Triển Khai</label>
-              <input
-                type="text"
-                value={newTopic.date}
-                onChange={(e) => setNewTopic({ ...newTopic, date: e.target.value })}
-                placeholder="VD: 15/11/2025"
-                className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Trạng Thái Thực Hiện</label>
-              <select
-                value={newTopic.status}
-                onChange={(e) => setNewTopic({ ...newTopic, status: e.target.value })}
-                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-500"
-              >
-                <option value="Đang triển khai">Đang triển khai</option>
-                <option value="Đã hoàn thành">Đã hoàn thành</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={() => setIsAddModalOpen(false)}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
-            >
-              Hủy bỏ
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl shadow-md shadow-brand-600/20 transition-all"
-            >
-              Lưu & Đăng Ký
-            </button>
-          </div>
-        </form>
-      </Modal>
+      {/* Modal Thảo Luận & Góp Ý Sau Tiết Dạy Nghiên Cứu Bài Học */}
+      <TopicFeedbackModal
+        isOpen={isFeedbackModalOpen}
+        onClose={() => {
+          setIsFeedbackModalOpen(false);
+          setSelectedTopicForFeedback(null);
+        }}
+        topic={selectedTopicForFeedback}
+        onAddFeedback={handleAddFeedback}
+        onDeleteFeedback={handleDeleteFeedback}
+      />
 
       {/* Modal Xác Nhận Xóa Minh Chứng (Chỉ dành cho Admin) */}
       <ConfirmModal
