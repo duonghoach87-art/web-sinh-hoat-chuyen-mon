@@ -1,5 +1,28 @@
-# Logs
-logs
+# ==============================================================================
+# TỆP CẤU HÌNH LOẠI BỎ CÁC THƯ MỤC VÀ TỆP TIN KHÔNG CẦN THIẾT (.GITIGNORE)
+# DỰ ÁN: CỔNG THÔNG TIN & QUẢN LÝ TỔ CHUYÊN MÔN KHTN (THCS)
+# ==============================================================================
+
+# 1. Thư viện phụ thuộc (Dependencies)
+node_modules/
+.pnp
+.pnp.js
+
+# 2. Thư mục bản dựng (Build Outputs)
+dist/
+dist-ssr/
+build/
+*.local
+
+# 3. Tệp bảo mật & Biến môi trường (Environment & Secrets)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 4. Nhật ký hệ thống (Logs)
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -7,23 +30,33 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
+# 5. Cấu hình trình biên tập IDE (Editor Configs)
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-# Environment variables
-.env
-.env.local
-.env.production
+# 6. Tệp rác của hệ điều hành (OS Artifacts)
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# 7. Thư mục cache và cấu hình Agent nội bộ (Internal Agent Cache & Rules)
+.agent/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# 8. Tệp tạm (Temporary files)
+scratch/
+tmp/
