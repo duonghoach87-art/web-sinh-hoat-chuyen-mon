@@ -179,7 +179,13 @@ export default function PrintCV478Modal({
                 <p>
                   <strong>Xếp loại tiết dạy:</strong>{' '}
                   <span className="font-bold text-sm text-brand-700 uppercase">
-                    {evaluation?.rank || 'Giỏi'}
+                    {evaluation?.rank === 'Tốt'
+                      ? 'Giỏi'
+                      : evaluation?.rank === 'Đạt'
+                      ? 'Trung bình'
+                      : evaluation?.rank === 'Chưa đạt'
+                      ? 'Không đạt'
+                      : evaluation?.rank || 'Giỏi'}
                   </span>
                 </p>
                 <p className="text-[11px] text-slate-500 italic">

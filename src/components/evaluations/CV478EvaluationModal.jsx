@@ -156,8 +156,30 @@ export default function CV478EvaluationModal({
         general_comment: generalComment.trim()
       };
 
-      const { error } = await supabase.from('lesson_evaluations').insert([newEval]);
-      if (error) throw error;
+      // Thử lưu với rank chuẩn CV 478
+      let { error } = await supabase.from('lesson_evaluations').insert([newEval]);
+
+      // Nếu Supabase chưa cập nhật check constraint thì tự động chuyển đổi dự phòng
+      if (
+        error &&
+        (error.message?.includes('lesson_evaluations_rank_check') ||
+          error.code === '23514')
+      ) {
+        const fallbackRankMap = {
+          Giỏi: 'Tốt',
+          Khá: 'Khá',
+          'Trung bình': 'Đạt',
+          'Không đạt': 'Chưa đạt'
+        };
+        const fallbackRank = fallbackRankMap[currentRank] || 'Tốt';
+        const retryRes = await supabase
+          .from('lesson_evaluations')
+          .insert([{ ...newEval, rank: fallbackRank }]);
+
+        if (retryRes.error) throw retryRes.error;
+      } else if (error) {
+        throw error;
+      }
 
       setShowForm(false);
       await fetchData();
@@ -666,7 +688,13 @@ export default function CV478EvaluationModal({
                             {evalItem.total_score} / 20 đ
                           </span>
                           <p className="text-[10px] font-bold text-emerald-600 uppercase">
-                            {evalItem.rank}
+                            {evalItem.rank === 'Tốt'
+                              ? 'Giỏi'
+                              : evalItem.rank === 'Đạt'
+                              ? 'Trung bình'
+                              : evalItem.rank === 'Chưa đạt'
+                              ? 'Không đạt'
+                              : evalItem.rank}
                           </p>
                         </div>
                       </div>
