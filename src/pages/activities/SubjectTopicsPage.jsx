@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import {
   BookOpen,
   Layers,
@@ -11,12 +12,108 @@ import {
   Eye,
   Calendar,
   Atom,
-  ArrowRight
+  ArrowRight,
+  Trash2,
+  PlusCircle,
+  ShieldAlert,
+  FilePlus,
+  Clock
 } from 'lucide-react';
 import Badge from '../../components/common/Badge';
+import Modal from '../../components/common/Modal';
+import ConfirmModal from '../../components/common/ConfirmModal';
+
+const INITIAL_TOPICS = [
+  {
+    id: 'topic-1',
+    type: 'lesson_study',
+    grade: 7,
+    subject: 'Khoa học Tự nhiên 7',
+    title: 'Nghiên cứu bài học: Trao đổi nước và các chất dinh dưỡng ở thực vật',
+    author: 'Tổ KHTN (Thầy Tuấn & Cô Hảo thực hiện)',
+    date: '15/10/2025',
+    summary: 'Ứng dụng phương pháp dạy học khám phá kết hợp thí nghiệm ảo quan sát dòng mạch gỗ và mạch rây ở thực vật.',
+    status: 'Đã hoàn thành',
+    evidence_url: ''
+  },
+  {
+    id: 'topic-2',
+    type: 'lesson_study',
+    grade: 8,
+    subject: 'Khoa học Tự nhiên 8',
+    title: 'Nghiên cứu bài học: Định luật bảo toàn khối lượng & Phương trình hóa học',
+    author: 'Nhóm Hóa học KHTN',
+    date: '20/11/2025',
+    summary: 'Thiết kế hoạt động nhóm đo khối lượng trước và sau phản ứng của dung dịch BaCl2 với Na2SO4.',
+    status: 'Đang triển khai',
+    evidence_url: ''
+  },
+  {
+    id: 'topic-3',
+    type: 'quality_improvement',
+    grade: 6,
+    subject: 'Khoa học Tự nhiên 6',
+    title: 'Chuyên đề: Đổi mới kiểm tra đánh giá theo định hướng phát triển năng lực KHTN 6',
+    author: 'Tổ Chuyên Môn KHTN',
+    date: '05/09/2025',
+    summary: 'Xây dựng ngân hàng câu hỏi trắc nghiệm khách quan kết hợp câu hỏi mở thực tiễn gắn với đời sống hàng ngày.',
+    status: 'Đã hoàn thành',
+    evidence_url: ''
+  },
+  {
+    id: 'topic-4',
+    type: 'quality_improvement',
+    grade: 9,
+    subject: 'Khoa học Tự nhiên 9',
+    title: 'Chuyên đề: Ứng dụng mô phỏng thí nghiệm ảo PhET và STEM trong giảng dạy KHTN',
+    author: 'Cô Nguyễn Thị Hảo',
+    date: '12/12/2025',
+    summary: 'Hướng dẫn giáo viên cách nhúng trực tiếp các mô phỏng PhET mạch điện và khúc xạ ánh sáng vào bài giảng điện tử.',
+    status: 'Đã hoàn thành',
+    evidence_url: ''
+  }
+];
 
 export default function SubjectTopicsPage() {
+  const { role: userRole, canManage } = useAuth();
+  const isAdmin = userRole === 'admin';
+
   const [activeTab, setActiveTab] = useState('lesson_study'); // 'lesson_study' | 'quality_improvement'
+  const [topics, setTopics] = useState(() => {
+    try {
+      const saved = localStorage.getItem('khtn_subject_topics');
+      return saved ? JSON.parse(saved) : INITIAL_TOPICS;
+    } catch {
+      return INITIAL_TOPICS;
+    }
+  });
+
+  // Modal State Thêm Minh Chứng
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [newTopic, setNewTopic] = useState({
+    title: '',
+    subject: 'Khoa học Tự nhiên 7',
+    grade: 7,
+    author: '',
+    date: new Date().toLocaleDateString('vi-VN'),
+    summary: '',
+    status: 'Đang triển khai',
+    type: 'lesson_study'
+  });
+
+  // Modal State Xóa Minh Chứng (Chỉ dành cho Admin)
+  const [topicToDelete, setTopicToDelete] = useState(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteSuccess, setDeleteSuccess] = useState(false);
+
+  // Lưu vào localStorage khi topics thay đổi
+  useEffect(() => {
+    try {
+      localStorage.setItem('khtn_subject_topics', JSON.stringify(topics));
+    } catch (e) {
+      console.warn('Không thể lưu topics vào localStorage:', e);
+    }
+  }, [topics]);
 
   const lessonStudySteps = [
     {
@@ -45,69 +142,84 @@ export default function SubjectTopicsPage() {
     }
   ];
 
-  const sampleTopics = [
-    {
-      id: 'topic-1',
-      type: 'lesson_study',
-      grade: 7,
-      subject: 'Khoa học Tự nhiên 7',
-      title: 'Nghiên cứu bài học: Trao đổi nước và các chất dinh dưỡng ở thực vật',
-      author: 'Tổ KHTN (Thầy Tuấn & Cô Hảo thực hiện)',
-      date: '15/10/2025',
-      summary: 'Ứng dụng phương pháp dạy học khám phá kết hợp thí nghiệm ảo quan sát dòng mạch gỗ và mạch rây ở thực vật.',
-      status: 'Đã hoàn thành'
-    },
-    {
-      id: 'topic-2',
-      type: 'lesson_study',
-      grade: 8,
-      subject: 'Khoa học Tự nhiên 8',
-      title: 'Nghiên cứu bài học: Định luật bảo toàn khối lượng & Phương trình hóa học',
-      author: 'Nhóm Hóa học KHTN',
-      date: '20/11/2025',
-      summary: 'Thiết kế hoạt động nhóm đo khối lượng trước và sau phản ứng của dung dịch BaCl2 với Na2SO4.',
-      status: 'Đang triển khai'
-    },
-    {
-      id: 'topic-3',
-      type: 'quality_improvement',
-      grade: 6,
-      subject: 'Khoa học Tự nhiên 6',
-      title: 'Chuyên đề: Đổi mới kiểm tra đánh giá theo định hướng phát triển năng lực KHTN 6',
-      author: 'Tổ Chuyên Môn KHTN',
-      date: '05/09/2025',
-      summary: 'Xây dựng ngân hàng câu hỏi trắc nghiệm khách quan kết hợp câu hỏi mở thực tiễn gắn với đời sống hàng ngày.',
-      status: 'Đã hoàn thành'
-    },
-    {
-      id: 'topic-4',
-      type: 'quality_improvement',
-      grade: 9,
-      subject: 'Khoa học Tự nhiên 9',
-      title: 'Chuyên đề: Ứng dụng mô phỏng thí nghiệm ảo PhET và STEM trong giảng dạy KHTN',
-      author: 'Cô Nguyễn Thị Hảo',
-      date: '12/12/2025',
-      summary: 'Hướng dẫn giáo viên cách nhúng trực tiếp các mô phỏng PhET mạch điện và khúc xạ ánh sáng vào bài giảng điện tử.',
-      status: 'Đã hoàn thành'
-    }
-  ];
+  const filteredTopics = topics.filter((t) => t.type === activeTab);
 
-  const filteredTopics = sampleTopics.filter((t) => t.type === activeTab);
+  const handleOpenAddModal = () => {
+    setNewTopic({
+      title: '',
+      subject: activeTab === 'lesson_study' ? 'Khoa học Tự nhiên 7' : 'Khoa học Tự nhiên',
+      grade: 7,
+      author: '',
+      date: new Date().toLocaleDateString('vi-VN'),
+      summary: '',
+      status: 'Đang triển khai',
+      type: activeTab
+    });
+    setIsAddModalOpen(true);
+  };
+
+  const handleSaveNewTopic = (e) => {
+    e.preventDefault();
+    if (!newTopic.title.trim() || !newTopic.author.trim()) {
+      alert('Vui lòng điền đầy đủ tên chuyên đề và người thực hiện.');
+      return;
+    }
+
+    const createdTopic = {
+      ...newTopic,
+      id: `topic-${Date.now()}`
+    };
+
+    setTopics([createdTopic, ...topics]);
+    setIsAddModalOpen(false);
+  };
+
+  const handleOpenDeleteConfirm = (topic) => {
+    if (!isAdmin) {
+      alert('Chỉ Quản trị viên (Admin - Thầy Hoạch) mới có quyền xóa minh chứng chuyên đề.');
+      return;
+    }
+    setTopicToDelete(topic);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleExecuteDelete = () => {
+    if (!topicToDelete) return;
+    setTopics(topics.filter((t) => t.id !== topicToDelete.id));
+    setIsDeleteModalOpen(false);
+    setTopicToDelete(null);
+    setDeleteSuccess(true);
+    setTimeout(() => setDeleteSuccess(false), 3000);
+  };
 
   return (
     <div className="space-y-8">
       {/* Header Page */}
       <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs">
-        <div className="flex items-center space-x-2 text-brand-600 mb-2">
-          <BookOpen className="w-5 h-5" />
-          <span className="text-xs font-bold uppercase tracking-wider">Đổi Mới Phương Pháp</span>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center space-x-2 text-brand-600 mb-2">
+              <BookOpen className="w-5 h-5" />
+              <span className="text-xs font-bold uppercase tracking-wider">Đổi Mới Phương Pháp</span>
+            </div>
+            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight">
+              Sinh Hoạt Chuyên Đề & Nghiên Cứu Bài Học (Lesson Study)
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-500 mt-2 leading-relaxed max-w-3xl">
+              Phân hệ chuyên đề được thiết kế 2 nhánh trọng tâm theo quy định của Bộ Giáo dục & Đào tạo nhằm nâng cao năng lực sư phạm và chất lượng dạy học môn Khoa học Tự nhiên THCS.
+            </p>
+          </div>
+
+          {canManage && (
+            <button
+              onClick={handleOpenAddModal}
+              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-600/20 transition-all shrink-0 self-start sm:self-auto"
+            >
+              <FilePlus className="w-4 h-4" />
+              <span>Đăng Ký Chuyên Đề Mới</span>
+            </button>
+          )}
         </div>
-        <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight">
-          Sinh Hoạt Chuyên Đề & Nghiên Cứu Bài Học (Lesson Study)
-        </h1>
-        <p className="text-xs sm:text-sm text-slate-500 mt-2 leading-relaxed max-w-3xl">
-          Phân hệ chuyên đề được thiết kế 2 nhánh trọng tâm theo quy định của Bộ Giáo dục & Đào tạo nhằm nâng cao năng lực sư phạm và chất lượng dạy học môn Khoa học Tự nhiên THCS.
-        </p>
 
         {/* Tab Switcher */}
         <div className="mt-6 flex flex-wrap gap-2 border-b border-slate-100 pb-4">
@@ -135,6 +247,13 @@ export default function SubjectTopicsPage() {
           </button>
         </div>
       </div>
+
+      {deleteSuccess && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center space-x-3 text-xs text-emerald-800 animate-in fade-in">
+          <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+          <span className="font-bold">Đã xóa hồ sơ minh chứng chuyên đề thành công khỏi hệ thống!</span>
+        </div>
+      )}
 
       {/* Tab 1: Lesson Study Protocol */}
       {activeTab === 'lesson_study' && (
@@ -180,37 +299,196 @@ export default function SubjectTopicsPage() {
 
       {/* Hồ sơ các chuyên đề đã thực hiện */}
       <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs">
-        <h3 className="text-base font-bold text-slate-800 mb-5 flex items-center justify-between">
-          <span>Hồ Sơ & Minh Chứng Chuyên Đề Đã Đăng Ký ({filteredTopics.length})</span>
-        </h3>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
+          <h3 className="text-base font-bold text-slate-800 flex items-center space-x-2">
+            <FileText className="w-5 h-5 text-brand-600" />
+            <span>Hồ Sơ & Minh Chứng Chuyên Đề Đã Đăng Ký ({filteredTopics.length})</span>
+          </h3>
 
-        <div className="space-y-4">
-          {filteredTopics.map((topic) => (
-            <div
-              key={topic.id}
-              className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 hover:border-brand-300 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
-            >
-              <div className="space-y-1.5 max-w-2xl">
-                <div className="flex items-center space-x-2">
-                  <Badge variant={topic.type === 'lesson_study' ? 'primary' : 'success'}>
-                    {topic.subject}
-                  </Badge>
-                  <span className="text-xs font-semibold text-slate-400">• {topic.date}</span>
-                </div>
-                <h4 className="text-sm font-bold text-slate-800">{topic.title}</h4>
-                <p className="text-xs text-slate-600">{topic.summary}</p>
-                <div className="text-[11px] text-slate-500 font-medium pt-1">
-                  Người thực hiện: <strong>{topic.author}</strong>
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-2 shrink-0">
-                <Badge variant="success">{topic.status}</Badge>
-              </div>
-            </div>
-          ))}
+          <div className="flex items-center space-x-2 text-xs text-slate-500">
+            {isAdmin ? (
+              <span className="px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-full font-semibold flex items-center space-x-1">
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                <span>Admin có quyền quản lý & xóa minh chứng</span>
+              </span>
+            ) : (
+              <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full font-medium flex items-center space-x-1">
+                <Eye className="w-3.5 h-3.5 text-slate-500" />
+                <span>Chế độ xem minh chứng (Chỉ đọc)</span>
+              </span>
+            )}
+          </div>
         </div>
+
+        {filteredTopics.length === 0 ? (
+          <div className="text-center py-10 border border-dashed border-slate-200 rounded-2xl text-xs text-slate-400">
+            Chưa có hồ sơ minh chứng chuyên đề nào trong mục này.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredTopics.map((topic) => (
+              <div
+                key={topic.id}
+                className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 hover:border-brand-300 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
+              >
+                <div className="space-y-1.5 max-w-2xl">
+                  <div className="flex items-center space-x-2">
+                    <Badge variant={topic.type === 'lesson_study' ? 'primary' : 'success'}>
+                      {topic.subject}
+                    </Badge>
+                    <span className="text-xs font-semibold text-slate-400">• {topic.date}</span>
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-800">{topic.title}</h4>
+                  <p className="text-xs text-slate-600 leading-relaxed">{topic.summary}</p>
+                  <div className="text-[11px] text-slate-500 font-medium pt-1">
+                    Người thực hiện: <strong>{topic.author}</strong>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-3 shrink-0 self-end md:self-center">
+                  <Badge variant={topic.status === 'Đã hoàn thành' ? 'success' : 'warning'}>
+                    {topic.status}
+                  </Badge>
+
+                  {/* Nút Xóa Minh Chứng - DÀNH RIÊNG CHO QUẢN TRỊ VIÊN (ADMIN - THẦY HOẠCH) */}
+                  {isAdmin && (
+                    <button
+                      onClick={() => handleOpenDeleteConfirm(topic)}
+                      className="p-2 text-rose-500 hover:text-white bg-white hover:bg-rose-600 border border-rose-200 hover:border-rose-600 rounded-xl transition-all shadow-2xs"
+                      title="Xóa minh chứng chuyên đề này (Quyền Admin)"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* Modal Thêm Chuyên Đề Mới */}
+      <Modal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        title="Đăng Ký Hồ Sơ / Minh Chứng Chuyên Đề Mới"
+      >
+        <form onSubmit={handleSaveNewTopic} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              Tên Chuyên Đề / Bài Học Minh Họa <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={newTopic.title}
+              onChange={(e) => setNewTopic({ ...newTopic, title: e.target.value })}
+              placeholder="VD: Nghiên cứu bài học: Sự nở vì nhiệt của chất rắn"
+              className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Môn / Phân Môn</label>
+              <select
+                value={newTopic.subject}
+                onChange={(e) => setNewTopic({ ...newTopic, subject: e.target.value })}
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-500"
+              >
+                <option value="Khoa học Tự nhiên 6">Khoa học Tự nhiên 6</option>
+                <option value="Khoa học Tự nhiên 7">Khoa học Tự nhiên 7</option>
+                <option value="Khoa học Tự nhiên 8">Khoa học Tự nhiên 8</option>
+                <option value="Khoa học Tự nhiên 9">Khoa học Tự nhiên 9</option>
+                <option value="Khoa học Tự nhiên (Chung)">Khoa học Tự nhiên (Chung)</option>
+                <option value="Toán học">Toán học</option>
+                <option value="Tin học">Tin học</option>
+                <option value="Công nghệ">Công nghệ</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Người / Nhóm Thực Hiện <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={newTopic.author}
+                onChange={(e) => setNewTopic({ ...newTopic, author: e.target.value })}
+                placeholder="VD: Nhóm Vật lý KHTN (Thầy Tuấn & Cô Hảo)"
+                className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-500"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">Tóm Tắt Nội Dung & Mục Tiêu Đổi Mới</label>
+            <textarea
+              rows={3}
+              value={newTopic.summary}
+              onChange={(e) => setNewTopic({ ...newTopic, summary: e.target.value })}
+              placeholder="Mô tả tóm tắt phương pháp giảng dạy, ứng dụng STEM hoặc thiết bị thí nghiệm..."
+              className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Thời Gian Triển Khai</label>
+              <input
+                type="text"
+                value={newTopic.date}
+                onChange={(e) => setNewTopic({ ...newTopic, date: e.target.value })}
+                placeholder="VD: 15/11/2025"
+                className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Trạng Thái Thực Hiện</label>
+              <select
+                value={newTopic.status}
+                onChange={(e) => setNewTopic({ ...newTopic, status: e.target.value })}
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-500"
+              >
+                <option value="Đang triển khai">Đang triển khai</option>
+                <option value="Đã hoàn thành">Đã hoàn thành</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setIsAddModalOpen(false)}
+              className="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+            >
+              Hủy bỏ
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl shadow-md shadow-brand-600/20 transition-all"
+            >
+              Lưu & Đăng Ký
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal Xác Nhận Xóa Minh Chứng (Chỉ dành cho Admin) */}
+      <ConfirmModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setTopicToDelete(null);
+        }}
+        onConfirm={handleExecuteDelete}
+        title="Xác Nhận Xóa Hồ Sơ Minh Chứng Chuyên Đề"
+        message={`Bạn có chắc chắn muốn xóa hồ sơ minh chứng chuyên đề: "${topicToDelete?.title}" khỏi hệ thống không? Hành động này dành riêng cho Quản trị viên (Admin - Thầy Hoạch).`}
+        confirmText="Đồng ý xóa"
+        type="danger"
+      />
     </div>
   );
 }
